@@ -24,7 +24,7 @@ class AdminPanel(commands.Cog):
         top5 = sorted(users.items(), key=lambda x: x[1].get('ka',0), reverse=True)[:5]
         text = '\n'.join([f"{idx+1}. <@{uid}> - {data.get('ka',0)} KA" for idx,(uid,data) in enumerate(top5)])
         for guild in self.bot.guilds:
-            # try find channel named Atlantyda
+            # try find channel named atlantyda
             ch = discord.utils.get(guild.text_channels, name='atlantyda')
             if ch:
                 try:
