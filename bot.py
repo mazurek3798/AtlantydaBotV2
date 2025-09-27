@@ -15,14 +15,18 @@ initial_cogs = [
     "cogs.kradzieze", "cogs.gildie", "cogs.wydarzenia", "cogs.shop", "cogs.admin_panel"
 ]
 
+# 🔧 Wklej tutaj ID swojego serwera
+GUILD_ID = 123456789012345678  
+
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"Zsynchronizowano {len(synced)} komend slash")
-    except Exception as e:
-        print("Failed to sync commands:", e)
     print(f"Zalogowano jako {bot.user} (ID: {bot.user.id})")
+    try:
+        guild = discord.Object(id=GUILD_ID)
+        synced = await bot.tree.sync(guild=guild)  # ⬅️ synchronizacja tylko na tym serwerze
+        print(f"✅ Zsynchronizowano {len(synced)} komend slash na serwerze {GUILD_ID}")
+    except Exception as e:
+        print("❌ Nie udało się zsynchronizować komend:", e)
 
 async def main():
     async with bot:
