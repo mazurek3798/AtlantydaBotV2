@@ -1,4 +1,3 @@
-
 import json, os, tempfile, asyncio
 from discord.ext import commands
 from discord import ui, Interaction
