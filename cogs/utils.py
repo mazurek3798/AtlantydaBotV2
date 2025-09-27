@@ -84,5 +84,5 @@ class Utils(commands.Cog):
 
 # Funkcja setup wymagana do załadowania coga
 async def setup(bot):
-    await bot.add_cog(Utils(bot))
+    await bot.add_cog(Utils(bot)):
 ```
