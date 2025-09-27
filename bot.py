@@ -16,7 +16,7 @@ initial_cogs = [
 ]
 
 # 🔧 Wklej tutaj ID swojego serwera
-GUILD_ID = 123456789012345678  
+GUILD_ID = 1383111630304575580  
 
 @bot.event
 async def on_ready():
