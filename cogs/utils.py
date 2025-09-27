@@ -1,5 +1,8 @@
-import json, os, tempfile, asyncio, time
+```python
+import json, os, tempfile, asyncio
+from discord.ext import commands
 from discord import ui, Interaction
+
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database.json')
 LOCK = asyncio.Lock()
 
@@ -68,6 +71,19 @@ class ConfirmView(ui.View):
         self.value = False
         await interaction.response.edit_message(content='Anulowano.', view=None)
         self.stop()
-async def setup(bot)
 
-    
+# ==============================
+# Cog z przykładową komendą
+# ==============================
+class Utils(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    async def hello(self, ctx):
+        await ctx.send("Cześć! To komenda z cogs.utils ✅")
+
+# Funkcja setup wymagana do załadowania coga
+async def setup(bot):
+    await bot.add_cog(Utils(bot))
+```
