@@ -25,7 +25,7 @@ class AdminPanel(commands.Cog):
         text = '\n'.join([f"{idx+1}. <@{uid}> - {data.get('ka',0)} KA" for idx,(uid,data) in enumerate(top5)])
         for guild in self.bot.guilds:
             # try find channel named Atlantyda
-            ch = discord.utils.get(guild.text_channels, name='Atlantyda')
+            ch = discord.utils.get(guild.text_channels, name='atlantyda')
             if ch:
                 try:
                     await ch.send('Tygodniowy raport - top5 najbogatszych:\n' + (text or 'Brak danych.'))
