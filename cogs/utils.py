@@ -44,7 +44,7 @@ def ensure_user(db, user_id: str):
         }
 
 def channel_check(channel):
-    return channel and channel.name == 'Atlantyda'
+    return channel and channel.name == 'atlantyda'
 
 def level_from_ka(total_ka):
     return total_ka // 1000
