@@ -69,5 +69,5 @@ class ConfirmView(ui.View):
         await interaction.response.edit_message(content='Anulowano.', view=None)
         self.stop()
 async def setup(bot):
-    await bot.add_cog(Utils(bot)
+
     
