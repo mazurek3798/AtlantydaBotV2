@@ -1,110 +1,80 @@
-import discord
-from discord import app_commands
+import discord, random, time
 from discord.ext import commands
-import random, time
-from .utils import read_db, write_db, ensure_user
-
-GUILD_ID = 1383111630304575580  # ID Twojego serwera
+from discord import app_commands
+from .utils import read_db, write_db, ensure_user, channel_check, level_from_ka
 
 class Ekonomia(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="daily", description="Odbierz swoją dzienną nagrodę")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
-    async def daily(self, interaction: discord.Interaction):
-        db = await read_db()
-        user_id = str(interaction.user.id)
-        ensure_user(db, user_id)
-
-        teraz = time.time()
-        ostatni_daily = db["users"][user_id]["daily"]
-
-        if teraz - ostatni_daily < 24 * 3600:
-            pozostalo = int((24 * 3600 - (teraz - ostatni_daily)) // 3600)
-            await interaction.response.send_message(
-                f"❌ Już odebrałeś dzisiejszą nagrodę! Spróbuj ponownie za {pozostalo} godzin.",
-                ephemeral=True
-            )
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        # RP-rewards: tylko na kanale Atlantyda, tylko użytkownicy, >=120 znaków, raz na 24h
+        if message.author.bot:
             return
-
-        nagroda = random.randint(100, 300)
-        db["users"][user_id]["ka"] += nagroda
-        db["users"][user_id]["daily"] = teraz
-        await write_db(db)
-
-        await interaction.response.send_message(f"✅ Odebrałeś dzienną nagrodę: **{nagroda}💰**")
-
-    @app_commands.command(name="work", description="Idź do pracy i zarób monety")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
-    async def work(self, interaction: discord.Interaction):
-        db = await read_db()
-        user_id = str(interaction.user.id)
-        ensure_user(db, user_id)
-
-        teraz = time.time()
-        ostatnia_praca = db["users"][user_id]["work"]
-
-        if teraz - ostatnia_praca < 3600:  # cooldown 1h
-            pozostalo = int((3600 - (teraz - ostatnia_praca)) // 60)
-            await interaction.response.send_message(
-                f"❌ Już dziś pracowałeś! Spróbuj ponownie za {pozostalo} minut.",
-                ephemeral=True
-            )
+        if not channel_check(message.channel):
             return
+        content = message.content.strip()
+        if len(content) >= 120:
+            db = read_db()
+            uid = str(message.author.id)
+            ensure_user(db, uid)
+            user = db["users"][uid]
+            now = int(time.time())
+            if now - user.get("last_rp_reward", 0) >= 24 * 3600:
+                user["ka"] += 50
+                user["reputation"] += 1
+                user["last_rp_reward"] = now
+                user["earned_total"] += 50
+                user["rp_xp"] = user.get("rp_xp", 0) + 10
+                # mała szansa na artefakt RP
+                if random.randint(1, 100) <= 8:
+                    user["items"]["perla_madrosci"] = user["items"].get("perla_madrosci", 0) + 1
+                user["level"] = level_from_ka(user["earned_total"] + user["spent_total"])
+                write_db(db)
+                try:
+                    await message.channel.send(f"{message.author.mention} otrzymuje +50 KA i +1 reputacji za wkład RP!")
+                except Exception:
+                    pass
 
-        zarobek = random.randint(50, 150)
-        prace = ["programistą", "kelnerem", "rolnikiem", "górnikiem", "budowlańcem"]
-        praca = random.choice(prace)
-
-        db["users"][user_id]["ka"] += zarobek
-        db["users"][user_id]["work"] = teraz
-        await write_db(db)
-
-        await interaction.response.send_message(
-            f"💼 Pracowałeś jako **{praca}** i zarobiłeś **{zarobek}💰**!"
-        )
-
-    @app_commands.command(name="saldo", description="Sprawdź ile masz monet")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.command(name="saldo", description="Pokaż swoje saldo, poziom i reputację.")
     async def saldo(self, interaction: discord.Interaction):
-        db = await read_db()
-        user_id = str(interaction.user.id)
-        ensure_user(db, user_id)
-
-        kasa = db["users"][user_id]["ka"]
-        reputacja = db["users"][user_id]["reputation"]
-        level = db["users"][user_id]["level"]
-
+        if not channel_check(interaction.channel):
+            await interaction.response.send_message(
+                "Komendy działają tylko na kanale #Atlantyda.", ephemeral=True
+            )
+            return
+        db = read_db()
+        uid = str(interaction.user.id)
+        ensure_user(db, uid)
+        user = db["users"][uid]
+        badges = ", ".join(user.get("badges", [])[:5]) or "Brak"
         await interaction.response.send_message(
-            f"💰 Masz **{kasa}** monet.\n⭐ Poziom: {level}\n📈 Reputacja: {reputacja}"
+            f"Saldo: {user['ka']} KA\nPoziom: {user['level']}\nReputacja: {user['reputation']}\nOdznaki: {badges}"
         )
 
-    @app_commands.command(name="daj", description="Przekaż monety innej osobie")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
-    async def daj(self, interaction: discord.Interaction, osoba: discord.Member, kwota: int):
-        if kwota <= 0:
-            await interaction.response.send_message("❌ Kwota musi być większa od zera.", ephemeral=True)
+    @app_commands.command(name="ranking", description="Pokaż ranking top 10 (KA/reputacja/poziom).")
+    async def ranking(self, interaction: discord.Interaction, typ: str = "ka"):
+        if not channel_check(interaction.channel):
+            await interaction.response.send_message(
+                "Komendy działają tylko na kanale #Atlantyda.", ephemeral=True
+            )
             return
-
-        db = await read_db()
-        nadawca_id = str(interaction.user.id)
-        odbiorca_id = str(osoba.id)
-
-        ensure_user(db, nadawca_id)
-        ensure_user(db, odbiorca_id)
-
-        if db["users"][nadawca_id]["ka"] < kwota:
-            await interaction.response.send_message("❌ Nie masz wystarczająco monet.", ephemeral=True)
-            return
-
-        db["users"][nadawca_id]["ka"] -= kwota
-        db["users"][odbiorca_id]["ka"] += kwota
-        await write_db(db)
-
-        await interaction.response.send_message(
-            f"✅ Przekazałeś **{kwota}💰** użytkownikowi {osoba.mention}."
-        )
+        typ = typ.lower()
+        db = read_db()
+        users = db.get("users", {})
+        if typ in ("reputacja", "rep"):
+            sorted_u = sorted(users.items(), key=lambda x: x[1].get("reputation", 0), reverse=True)
+        elif typ in ("level", "poziom"):
+            sorted_u = sorted(users.items(), key=lambda x: x[1].get("level", 0), reverse=True)
+        else:
+            sorted_u = sorted(users.items(), key=lambda x: x[1].get("ka", 0), reverse=True)
+        text = []
+        for i, (uid, data) in enumerate(sorted_u[:10]):
+            text.append(
+                f"{i+1}. <@{uid}> - {data.get('ka', 0)} KA / Lvl {data.get('level', 0)} / Rep {data.get('reputation', 0)}"
+            )
+        await interaction.response.send_message("\n".join(text) or "Brak danych.")
 
 async def setup(bot):
     await bot.add_cog(Ekonomia(bot))
