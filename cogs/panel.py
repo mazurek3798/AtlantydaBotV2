@@ -1,4 +1,3 @@
-# cogs/panel.py
 import discord
 import time
 import random
