@@ -106,5 +106,5 @@ async def gildia_zmien(self, interaction: discord.Interaction, użytkownik: disc
     )
 ```
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
 await bot.add_cog(AdminPanel(bot))
