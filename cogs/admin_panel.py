@@ -8,7 +8,7 @@ class AdminPanel(commands.Cog):
         self.bot = bot
 self.bot = bot
 
-```
+
 # 🔹 Dodawanie kasy
 @app_commands.command(name="dodajka", description="Dodaj KA użytkownikowi (tylko administrator).")
 async def dodajka(self, interaction: discord.Interaction, użytkownik: discord.Member, kwota: int):
