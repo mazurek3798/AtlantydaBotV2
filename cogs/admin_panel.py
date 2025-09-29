@@ -4,7 +4,8 @@ from discord import app_commands
 from .utils import read_db, write_db, ensure_user
 
 class AdminPanel(commands.Cog):
-def **init**(self, bot):
+    def __init__(self, bot):
+        self.bot = bot
 self.bot = bot
 
 ```
