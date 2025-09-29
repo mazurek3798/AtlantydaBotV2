@@ -68,3 +68,5 @@ class ConfirmView(ui.View):
         self.value = False
         await interaction.response.edit_message(content='Anulowano.', view=None)
         self.stop()
+db = await utils.read_db()
+utils.ensure_user(db, str(ctx.author.id))
