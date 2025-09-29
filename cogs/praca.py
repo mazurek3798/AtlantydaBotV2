@@ -1,4 +1,3 @@
-```python
 import discord, random, time
 from discord.ext import commands
 from discord import app_commands
