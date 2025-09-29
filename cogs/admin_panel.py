@@ -1,89 +1,96 @@
-import discord, time
+import discord
 from discord.ext import commands
 from discord import app_commands
 from .utils import read_db, write_db, ensure_user
+import time
+
 
 class AdminPanel(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-self.bot = bot
 
+    # ───────────────────────────────
+    # KOMENDA: DODAJ KASĘ
+    # ───────────────────────────────
+    @app_commands.command(name="dodaj_kase", description="Dodaje KA użytkownikowi (tylko dla administratorów).")
+    async def dodaj_kase(self, interaction: discord.Interaction, user: discord.Member, kwota: int):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Tylko administrator może używać tej komendy.", ephemeral=True)
+            return
 
-# 🔹 Dodawanie kasy
-@app_commands.command(name="dodajka", description="Dodaj KA użytkownikowi (tylko administrator).")
-async def dodajka(self, interaction: discord.Interaction, użytkownik: discord.Member, kwota: int):
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
-        return
-    db = await read_db()
-    uid = str(użytkownik.id)
-    ensure_user(db, uid)
-    db["users"][uid]["ka"] += kwota
-    db["users"][uid]["earned_total"] += kwota
-    await write_db(db)
-    await interaction.response.send_message(
-        f"✅ Dodano {kwota} KA dla {użytkownik.mention}. Nowe saldo: {db['users'][uid]['ka']} KA"
-    )
+        db = await read_db()
+        uid = str(user.id)
+        ensure_user(db, uid)
 
-# 🔹 Banowanie
-@app_commands.command(name="banuj", description="Zbanuj użytkownika (tylko administrator).")
-async def banuj(self, interaction: discord.Interaction, użytkownik: discord.Member, powód: str = "Brak powodu"):
-    if not interaction.user.guild_permissions.ban_members:
-        await interaction.response.send_message("❌ Brak uprawnień do banowania.", ephemeral=True)
-        return
-    try:
-        await użytkownik.ban(reason=powód)
-        await interaction.response.send_message(f"🚫 {użytkownik.mention} został zbanowany. Powód: {powód}")
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Nie udało się zbanować: {e}", ephemeral=True)
+        db["users"][uid]["ka"] += kwota
+        db["users"][uid]["earned_total"] += kwota
+        await write_db(db)
 
-# 🔹 Wyciszanie
-@app_commands.command(name="wycisz", description="Wycisz użytkownika na podany czas (w minutach).")
-async def wycisz(self, interaction: discord.Interaction, użytkownik: discord.Member, minuty: int, powód: str = "Brak powodu"):
-    if not interaction.user.guild_permissions.moderate_members:
-        await interaction.response.send_message("❌ Brak uprawnień do wyciszania.", ephemeral=True)
-        return
-    try:
-        duration = discord.utils.utcnow() + discord.timedelta(minutes=minuty)
-        await użytkownik.edit(timeout=duration, reason=powód)
         await interaction.response.send_message(
-            f"🔇 {użytkownik.mention} został wyciszony na {minuty} minut. Powód: {powód}"
+            f"✅ Dodano {kwota} KA dla {user.mention}. "
+            f"Nowe saldo: {db['users'][uid]['ka']} KA"
         )
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Nie udało się wyciszyć: {e}", ephemeral=True)
 
-# 🔹 Ostrzeżenia
-@app_commands.command(name="ostrzez", description="Daj ostrzeżenie użytkownikowi (tylko moderator/administrator).")
-async def ostrzez(self, interaction: discord.Interaction, użytkownik: discord.Member, powód: str = "Brak powodu"):
-    if not (interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.moderate_members):
-        await interaction.response.send_message("❌ Brak uprawnień do ostrzeżeń.", ephemeral=True)
-        return
-    db = await read_db()
-    uid = str(użytkownik.id)
-    ensure_user(db, uid)
-    user = db["users"][uid]
-    user["warnings"] = user.get("warnings", 0) + 1
-    await write_db(db)
-    await interaction.response.send_message(
-        f"⚠️ {użytkownik.mention} otrzymał ostrzeżenie. (Łącznie: {user['warnings']}) Powód: {powód}"
-    )
+    # ───────────────────────────────
+    # KOMENDA: ZBANUJ
+    # ───────────────────────────────
+    @app_commands.command(name="zbanuj", description="Banuje użytkownika (tylko dla administratorów).")
+    async def zbanuj(self, interaction: discord.Interaction, user: discord.Member, powod: str = "Brak powodu"):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Nie masz uprawnień do banowania.", ephemeral=True)
+            return
 
-# 🔹 Zmiana gildii
-@app_commands.command(name="gildia_zmien", description="Zmień nazwę gildii użytkownika (tylko administrator).")
-async def gildia_zmien(self, interaction: discord.Interaction, użytkownik: discord.Member, nowa_nazwa: str):
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
-        return
-    db = await read_db()
-    uid = str(użytkownik.id)
-    ensure_user(db, uid)
-    user = db["users"][uid]
-    user["guild"] = nowa_nazwa
-    await write_db(db)
-    await interaction.response.send_message(
-        f"🏰 Gildia użytkownika {użytkownik.mention} została zmieniona na: **{nowa_nazwa}**"
-    )
-```
+        try:
+            await user.ban(reason=powod)
+            await interaction.response.send_message(f"🚫 {user.mention} został zbanowany. Powód: {powod}")
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Nie udało się zbanować użytkownika: {e}", ephemeral=True)
 
+    # ───────────────────────────────
+    # KOMENDA: UKARZ (WARN)
+    # ───────────────────────────────
+    @app_commands.command(name="ukarz", description="Daje ostrzeżenie (warn) użytkownikowi (tylko admin).")
+    async def ukarz(self, interaction: discord.Interaction, user: discord.Member, powod: str = "Brak powodu"):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Nie masz uprawnień do karania.", ephemeral=True)
+            return
+
+        db = await read_db()
+        uid = str(user.id)
+        ensure_user(db, uid)
+
+        # dodajemy liczbę warnów
+        db["users"][uid]["warns"] = db["users"][uid].get("warns", 0) + 1
+        await write_db(db)
+
+        await interaction.response.send_message(
+            f"⚠️ {user.mention} otrzymał ostrzeżenie. "
+            f"(Powód: {powod}) – łącznie {db['users'][uid]['warns']} ostrzeżeń."
+        )
+
+    # ───────────────────────────────
+    # KOMENDA: RESET GILDII
+    # ───────────────────────────────
+    @app_commands.command(name="gildia_reset", description="Usuwa gildie użytkownika (tylko admin).")
+    async def gildia_reset(self, interaction: discord.Interaction, user: discord.Member):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Nie masz uprawnień do resetowania gildii.", ephemeral=True)
+            return
+
+        db = await read_db()
+        uid = str(user.id)
+        ensure_user(db, uid)
+
+        if "guild" in db["users"][uid]:
+            db["users"][uid].pop("guild")
+            await write_db(db)
+            await interaction.response.send_message(f"🏰 Gildia użytkownika {user.mention} została usunięta.")
+        else:
+            await interaction.response.send_message(f"ℹ️ Użytkownik {user.mention} nie miał gildii.")
+
+
+# ───────────────────────────────
+# SETUP
+# ───────────────────────────────
 async def setup(bot: commands.Bot):
-await bot.add_cog(AdminPanel(bot))
+    await bot.add_cog(AdminPanel(bot))
