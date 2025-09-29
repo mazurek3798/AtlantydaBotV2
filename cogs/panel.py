@@ -86,3 +86,5 @@ class PlayerPanelView(ui.View):
             timestamp=discord.utils.utcnow()
         )
         aw
+async def setup(bot):
+    await bot.add_cog(Panel(bot))
