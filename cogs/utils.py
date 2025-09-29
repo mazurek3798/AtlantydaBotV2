@@ -1,7 +1,9 @@
-import json, os, tempfile, asyncio, time
+import json, os, tempfile, asyncio
 from discord import ui, Interaction
+
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database.json')
 LOCK = asyncio.Lock()
+
 
 def atomic_write(path: str, data: str):
     dirn = os.path.dirname(path) or '.'
@@ -10,6 +12,7 @@ def atomic_write(path: str, data: str):
         w.write(data)
     os.replace(tmp, path)
 
+
 async def read_db():
     async with LOCK:
         if not os.path.exists(DB_PATH):
@@ -17,9 +20,11 @@ async def read_db():
         with open(DB_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
 
+
 async def write_db(obj):
     async with LOCK:
         atomic_write(DB_PATH, json.dumps(obj, ensure_ascii=False, indent=2))
+
 
 def ensure_user(db, user_id: str):
     if 'users' not in db:
@@ -41,11 +46,14 @@ def ensure_user(db, user_id: str):
             'rp_xp': 0
         }
 
+
 def channel_check(channel):
     return channel and channel.name == 'Atlantyda'
 
+
 def level_from_ka(total_ka):
     return total_ka // 1000
+
 
 class ConfirmView(ui.View):
     def __init__(self, timeout=60):
@@ -68,5 +76,3 @@ class ConfirmView(ui.View):
         self.value = False
         await interaction.response.edit_message(content='Anulowano.', view=None)
         self.stop()
-db = await utils.read_db()
-utils.ensure_user(db, str(ctx.author.id))
