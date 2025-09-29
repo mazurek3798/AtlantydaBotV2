@@ -1,0 +1,52 @@
+{
+  "users": {},
+  "guilds": {},
+  "events": {
+    "active": null,
+    "current_mods": {}
+  },
+  "shop": {
+    "amulet": {
+      "name": "Amulet Ochrony",
+      "price": 500,
+      "desc": "Zmniejsza szansę kradzieży."
+    },
+    "mapa": {
+      "name": "Mapa Skarbów",
+      "price": 800,
+      "desc": "Zwiększa szansę eksploracji."
+    },
+    "trojzab": {
+      "name": "Trójząb Posejdona",
+      "price": 1500,
+      "desc": "Zwiększa siłę w pojedynkach."
+    },
+    "klejnot": {
+      "name": "Klejnot Syren",
+      "price": 1200,
+      "desc": "Zwiększa reputację."
+    },
+    "pierścień": {
+      "name": "Pierścień Atlantydy",
+      "price": 1000,
+      "desc": "+1 reputacji dziennie (pasyw)."
+    },
+    "muszla": {
+      "name": "Muszla Syreny",
+      "price": 700,
+      "desc": "Daje jednorazowe darmowe codzienne."
+    },
+    "eliksir": {
+      "name": "Eliksir Cieni",
+      "price": 600,
+      "desc": "Zwiększa sukces kradzieży jednorazowo."
+    }
+  },
+  "guilds_list": {},
+  "badges": {},
+  "season": {
+    "current": 1,
+    "season_start": 1758997010,
+    "top_this_season": []
+  }
+}
