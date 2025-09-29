@@ -4,7 +4,6 @@ from discord import app_commands
 from .utils import read_db, write_db, ensure_user, channel_check, level_from_ka
 
 COOLDOWN = 10 * 60  # 10 minut
-
 class Praca(commands.Cog):
 def **init**(self, bot):
 self.bot = bot
