@@ -1,35 +1,13 @@
 import discord, time
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord import app_commands
 from .utils import read_db, write_db, ensure_user
 
 class AdminPanel(commands.Cog):
 def **init**(self, bot):
 self.bot = bot
-self.weekly_task = tasks.loop(hours=24)(self.daily_checks)
-self.weekly_counter = 0
-self.weekly_task.start()
 
 ```
-async def daily_checks(self):
-    self.weekly_counter += 1
-    if self.weekly_counter >= 7:
-        await self.send_weekly_report()
-        self.weekly_counter = 0
-
-async def send_weekly_report(self):
-    db = await read_db()
-    users = db.get("users", {})
-    top5 = sorted(users.items(), key=lambda x: x[1].get("ka", 0), reverse=True)[:5]
-    text = "\n".join([f"{idx+1}. <@{uid}> - {data.get('ka',0)} KA" for idx,(uid,data) in enumerate(top5)])
-    for guild in self.bot.guilds:
-        ch = discord.utils.get(guild.text_channels, name="atlantyda")
-        if ch:
-            try:
-                await ch.send("📊 Tygodniowy raport - top5 najbogatszych:\n" + (text or "Brak danych."))
-            except Exception:
-                pass
-
 # 🔹 Dodawanie kasy
 @app_commands.command(name="dodajka", description="Dodaj KA użytkownikowi (tylko administrator).")
 async def dodajka(self, interaction: discord.Interaction, użytkownik: discord.Member, kwota: int):
