@@ -102,7 +102,7 @@ async def gildia_zmien(self, interaction: discord.Interaction, użytkownik: disc
     user["guild"] = nowa_nazwa
     await write_db(db)
     await interaction.response.send_message(
-        f"🏰 {użytkownik.mention} został przeniesiony do gildii **{nowa_nazwa}**"
+        f"🏰 Gildia użytkownika {użytkownik.mention} została zmieniona na: **{nowa_nazwa}**"
     )
 ```
 
