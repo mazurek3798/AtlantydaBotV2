@@ -1,12 +1,12 @@
-import discord, time
+import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from .utils import read_db, write_db, channel_check, ensure_user
+from .utils import read_db, write_db, ensure_user
 
 class AdminPanel(commands.Cog):
 def **init**(self, bot):
 self.bot = bot
-self.weekly_task = tasks.loop(seconds=24*3600)(self.daily_checks)
+self.weekly_task = tasks.loop(hours=24)(self.daily_checks)
 self.weekly_counter = 0
 self.weekly_task.start()
 
@@ -23,7 +23,7 @@ async def send_weekly_report(self):
     top5 = sorted(users.items(), key=lambda x: x[1].get("ka", 0), reverse=True)[:5]
     text = "\n".join([f"{idx+1}. <@{uid}> - {data.get('ka',0)} KA" for idx,(uid,data) in enumerate(top5)])
     for guild in self.bot.guilds:
-        ch = discord.utils.get(guild.text_channels, name="Atlantyda")
+        ch = discord.utils.get(guild.text_channels, name="atlantyda")
         if ch:
             try:
                 await ch.send("📊 Tygodniowy raport - top5 najbogatszych:\n" + (text or "Brak danych."))
@@ -102,7 +102,7 @@ async def gildia_zmien(self, interaction: discord.Interaction, użytkownik: disc
     user["guild"] = nowa_nazwa
     await write_db(db)
     await interaction.response.send_message(
-        f"🏰 Gildia użytkownika {użytkownik.mention} została zmieniona na: **{nowa_nazwa}**"
+        f"🏰 {użytkownik.mention} został przeniesiony do gildii **{nowa_nazwa}**"
     )
 ```
 
