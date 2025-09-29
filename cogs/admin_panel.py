@@ -76,5 +76,35 @@ async def wycisz(self, interaction: discord.Interaction, użytkownik: discord.Me
 # 🔹 Ostrzeżenia
 @app_commands.command(name="ostrzez", description="Daj ostrzeżenie użytkownikowi (tylko moderator/administrator).")
 async def ostrzez(self, interaction: discord.Interaction, użytkownik: discord.Member, powód: str = "Brak powodu"):
-    if not (interaction.user.guild_permissions.administr
+    if not (interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.moderate_members):
+        await interaction.response.send_message("❌ Brak uprawnień do ostrzeżeń.", ephemeral=True)
+        return
+    db = await read_db()
+    uid = str(użytkownik.id)
+    ensure_user(db, uid)
+    user = db["users"][uid]
+    user["warnings"] = user.get("warnings", 0) + 1
+    await write_db(db)
+    await interaction.response.send_message(
+        f"⚠️ {użytkownik.mention} otrzymał ostrzeżenie. (Łącznie: {user['warnings']}) Powód: {powód}"
+    )
+
+# 🔹 Zmiana gildii
+@app_commands.command(name="gildia_zmien", description="Zmień nazwę gildii użytkownika (tylko administrator).")
+async def gildia_zmien(self, interaction: discord.Interaction, użytkownik: discord.Member, nowa_nazwa: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ Brak uprawnień.", ephemeral=True)
+        return
+    db = await read_db()
+    uid = str(użytkownik.id)
+    ensure_user(db, uid)
+    user = db["users"][uid]
+    user["guild"] = nowa_nazwa
+    await write_db(db)
+    await interaction.response.send_message(
+        f"🏰 {użytkownik.mention} został przeniesiony do gildii **{nowa_nazwa}**"
+    )
 ```
+
+async def setup(bot: commands.Bot):
+await bot.add_cog(AdminPanel(bot))
