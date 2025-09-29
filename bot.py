@@ -34,3 +34,4 @@ if __name__ == '__main__':
         print('Ustaw zmienną środowiskową DISCORD_TOKEN i spróbuj ponownie.')
     else:
         bot.run(token)
+await bot.load_extension("cogs.praca")
