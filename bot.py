@@ -27,6 +27,7 @@ async def on_ready():
         await bot.tree.sync()
     except Exception as e:
         print('Failed to sync commands', e)
+await bot.load_extension("cogs.praca")
 
 if __name__ == '__main__':
     token = os.getenv('DISCORD_TOKEN')
