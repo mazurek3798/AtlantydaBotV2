@@ -76,3 +76,11 @@ class ConfirmView(ui.View):
         self.value = False
         await interaction.response.edit_message(content='Anulowano.', view=None)
         self.stop()
+from discord.ext import commands
+
+class Utils(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+async def setup(bot):
+    await bot.add_cog(Utils(bot))
