@@ -11,7 +11,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 initial_cogs = [
     'cogs.utils', 'cogs.ekonomia', 'cogs.handel', 'cogs.pojedynki',
-    'cogs.kradzieze', 'cogs.gildie', 'cogs.wydarzenia', 'cogs.shop', 'cogs.admin_panel'
+    'cogs.kradzieze', 'cogs.gildie', 'cogs.wydarzenia', 'cogs.shop', 'cogs.admin_panel','cogs.praca'
 ]
 
 @bot.event
@@ -34,4 +34,4 @@ if __name__ == '__main__':
         print('Ustaw zmienną środowiskową DISCORD_TOKEN i spróbuj ponownie.')
     else:
         bot.run(token)
-await bot.load_extension("cogs.praca")
+
