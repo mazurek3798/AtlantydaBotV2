@@ -4,6 +4,7 @@ from discord import app_commands
 from .utils import read_db, write_db, ensure_user, channel_check, level_from_ka
 
 COOLDOWN = 10 * 60  # 10 minut
+
 class Praca(commands.Cog):
 def **init**(self, bot):
 self.bot = bot
@@ -12,7 +13,10 @@ self.bot = bot
 @app_commands.command(name="praca", description="Idź do pracy, aby zarobić KA (co 10 minut).")
 async def praca(self, interaction: discord.Interaction):
     if not channel_check(interaction.channel):
-        await interaction.response.send_message("Ta komenda działa tylko na kanale #Atlantyda.", ephemeral=True)
+        await interaction.response.send_message(
+            "Ta komenda działa tylko na kanale #Atlantyda.", 
+            ephemeral=True
+        )
         return
 
     db = await read_db()
