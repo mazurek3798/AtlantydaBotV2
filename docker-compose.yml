@@ -1,9 +1,0 @@
-version: "3.8"
-services:
-  atlantyda:
-    build: .
-    env_file:
-      - .env
-    volumes:
-      - ./data:/app
-    restart: unless-stopped
