@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 import db_pg      # musi mieć get_pool(), init_db(), get_player(), create_player(), update_player(), add_item(), get_inventory(), create_guild(), join_guild(), get_guild_by_name(), get_guild_by_id(), get_player_guild(), create_war(), get_active_wars(), increment_war_win(), end_war()
 import items      # lista ITEMS = [{'id','name','price','level'}, ...]
-import rpg.py
+import rpg
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
