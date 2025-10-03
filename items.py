@@ -1,318 +1,179 @@
+# items.py — lista wszystkich przedmiotów dostępnych w świecie Atlantydy 🌊
+
 ITEMS = [
-    # ======== WOJOWNIK ========
+    # ====== NEUTRALNE ======
     {
-        "id": "iron_mace",
-        "name": "Żelazna maczuga",
-        "class": "Wojownik",
-        "level": 2,
-        "hp": 0,
-        "str": 2,
-        "price": 100
-    },
-    {
-        "id": "war_axe",
-        "name": "Topór wojenny",
-        "class": "Wojownik",
-        "level": 5,
-        "hp": 0,
-        "str": 4,
-        "price": 400
-    },
-    {
-        "id": "gladiator_hammer",
-        "name": "Młot gladiatora",
-        "class": "Wojownik",
-        "level": 8,
-        "hp": 2,
-        "str": 6,
-        "price": 1200
-    },
-    {
-        "id": "spike_armor",
-        "name": "Zbroja z kolców",
-        "class": "Wojownik",
-        "level": 7,
-        "hp": 8,
-        "price": 2200,
-        "special": "reflect"
-    },
-    {
-        "id": "minotaur_helm",
-        "name": "Hełm Minotaura",
-        "class": "Wojownik",
-        "level": 12,
-        "hp": 5,
-        "str": 2,
-        "price": 3500
-    },
-    {
-        "id": "titan_blade",
-        "name": "Ostrze Tytanów",
-        "class": "Wojownik",
-        "level": 15,
-        "hp": 5,
-        "str": 10,
-        "price": 8000
-    },
-    {
-        "id": "atlantis_shield",
-        "name": "Tarcza Atlantydy",
-        "class": "Wojownik",
-        "level": 10,
-        "hp": 4,
-        "dex": 2,
-        "price": 2800
-    },
-
-    # ======== ZABÓJCA ========
-    {
-        "id": "shadow_dagger",
-        "name": "Sztylet cienia",
-        "class": "Zabójca",
-        "level": 2,
-        "dex": 2,
-        "str": 1,
-        "price": 120
-    },
-    {
-        "id": "twins",
-        "name": "Bliźniacze ostrza",
-        "class": "Zabójca",
-        "level": 6,
-        "dex": 5,
-        "price": 650
-    },
-    {
-        "id": "siren_crossbow",
-        "name": "Kusza syreny",
-        "class": "Zabójca",
-        "level": 9,
-        "dex": 4,
-        "str": 2,
-        "price": 1400
-    },
-    {
-        "id": "cloak_of_dark",
-        "name": "Płaszcz mroku",
-        "class": "Zabójca",
-        "level": 7,
-        "hp": 6,
-        "dex": 3,
-        "price": 2000
-    },
-    {
-        "id": "mask_of_shadow",
-        "name": "Maska Cienia",
-        "class": "Zabójca",
-        "level": 10,
-        "dex": 3,
-        "cha": 2,
-        "price": 2600
-    },
-    {
-        "id": "blood_blades",
-        "name": "Ostrza krwi",
-        "class": "Zabójca",
-        "level": 14,
-        "dex": 8,
-        "price": 4200,
-        "special": "bleed"
-    },
-
-    # ======== MAG ========
-    {
-        "id": "fire_wand",
-        "name": "Różdżka ognia",
-        "class": "Mag",
-        "level": 3,
-        "wis": 3,
-        "price": 150
-    },
-    {
-        "id": "spellbook",
-        "name": "Księga zaklęć",
-        "class": "Mag",
-        "level": 6,
-        "wis": 5,
-        "hp": 2,
-        "price": 700
-    },
-    {
-        "id": "ice_staff",
-        "name": "Laska lodu",
-        "class": "Mag",
-        "level": 9,
-        "wis": 6,
-        "price": 1600,
-        "special": "slow"
-    },
-    {
-        "id": "sea_mage_robe",
-        "name": "Szata maga morskiego",
-        "class": "Mag",
-        "level": 8,
-        "hp": 6,
-        "wis": 3,
-        "price": 2600
-    },
-    {
-        "id": "atlantis_amulet",
-        "name": "Amulet Atlantydy",
-        "class": "Mag",
-        "level": 12,
-        "wis": 4,
-        "dex": 2,
-        "price": 4200
-    },
-    {
-        "id": "archmage_staff",
-        "name": "Laska Archimaga",
-        "class": "Mag",
-        "level": 15,
-        "wis": 10,
-        "hp": 4,
-        "price": 8200
-    },
-
-    # ======== KAPŁAN ========
-    {
-        "id": "healer_staff",
-        "name": "Laska uzdrowiciela",
-        "class": "Kapłan",
-        "level": 3,
-        "wis": 2,
-        "cha": 2,
-        "price": 140
-    },
-    {
-        "id": "prayer_book",
-        "name": "Księga modlitw",
-        "class": "Kapłan",
-        "level": 6,
-        "wis": 4,
-        "price": 750,
-        "special": "healing_boost"
-    },
-    {
-        "id": "poseidon_relic",
-        "name": "Relikwia Posejdona",
-        "class": "Kapłan",
-        "level": 9,
-        "wis": 6,
-        "hp": 3,
-        "price": 1800
-    },
-    {
-        "id": "priest_robe",
-        "name": "Szata kapłana Atlantydy",
-        "class": "Kapłan",
-        "level": 8,
-        "hp": 5,
-        "wis": 4,
-        "price": 2400
-    },
-    {
-        "id": "healer_ring",
-        "name": "Pierścień uzdrowiciela",
-        "class": "Kapłan",
-        "level": 12,
-        "wis": 3,
-        "hp": 2,
-        "price": 3300
-    },
-    {
-        "id": "divine_scepter",
-        "name": "Berło boskiej mocy",
-        "class": "Kapłan",
-        "level": 15,
-        "wis": 10,
-        "cha": 5,
-        "price": 8000
-    },
-
-    # ======== UNIWERSALNE ========
-    {
-        "id": "victory_trophy",
-        "name": "Trofeum zwycięzcy",
+        "id": "basic_potion",
+        "name": "Mikstura Życia (Mała)",
         "class": "All",
-        "level": 5,
-        "hp": 2,
-        "str": 2,
-        "dex": 2,
-        "wis": 2,
-        "cha": 2,
-        "price": 900
-    },
-    {
-        "id": "war_medalion",
-        "name": "Medalion wojownika",
-        "class": "All",
-        "level": 10,
-        "str": 5,
-        "price": 3000
-    },
-    {
-        "id": "champ_blade",
-        "name": "Ostrze zwycięzcy",
-        "class": "All",
-        "level": 12,
-        "str": 10,
-        "hp": 5,
-        "price": 6000
-    },
-    {
-        "id": "helmet_of_glory",
-        "name": "Hełm chwały",
-        "class": "All",
-        "level": 15,
-        "hp": 12,
-        "dex": 3,
-        "price": 10000
-    },
-    {
-        "id": "crown_of_atlantis",
-        "name": "Korona mistrza Atlantydy",
-        "class": "All",
-        "level": 25,
-        "hp": 20,
-        "str": 20,
-        "dex": 20,
-        "wis": 20,
-        "cha": 20,
-        "price": 99999
-    },
-
-    # ======== MIKSTURY ========
-    {
-        "id": "potion_hp_small",
-        "name": "Mikstura życia (mała)",
-        "class": "All",
+        "price": 25,
         "level": 1,
-        "price": 50,
-        "special": "restore_25hp"
+        "potion": 50,  # leczy 50 HP
+        "special": "Odnawia 50 punktów życia podczas użycia."
     },
     {
-        "id": "potion_hp_large",
-        "name": "Mikstura życia (duża)",
+        "id": "greater_potion",
+        "name": "Mikstura Życia (Duża)",
         "class": "All",
-        "level": 5,
-        "price": 200,
-        "special": "restore_100hp"
-    },
-    {
-        "id": "potion_mana_small",
-        "name": "Mikstura many (mała)",
-        "class": "Mag",
+        "price": 60,
         "level": 3,
-        "price": 75,
-        "special": "restore_25mana"
+        "potion": 150,
+        "special": "Odnawia 150 punktów życia podczas użycia."
     },
     {
-        "id": "potion_mana_large",
-        "name": "Mikstura many (duża)",
-        "class": "Mag",
-        "level": 8,
+        "id": "elixir_vitality",
+        "name": "Eliksir Witalności",
+        "class": "All",
+        "price": 120,
+        "level": 5,
+        "potion": 300,
+        "hp": 20,
+        "special": "Stały bonus +20 HP po wypiciu."
+    },
+
+    # ====== WOJOWNIK ======
+    {
+        "id": "iron_sword",
+        "name": "Żelazny Miecz",
+        "class": "Wojownik",
+        "price": 80,
+        "level": 2,
+        "str": 5,
+        "special": "Podstawowa broń wojownika, dodaje 5 siły."
+    },
+    {
+        "id": "steel_armor",
+        "name": "Stalowa Zbroja",
+        "class": "Wojownik",
+        "price": 150,
+        "level": 4,
+        "hp": 40,
+        "str": 2,
+        "special": "Zwiększa wytrzymałość i lekko siłę."
+    },
+    {
+        "id": "blade_of_valor",
+        "name": "Ostrze Odwagi",
+        "class": "Wojownik",
+        "price": 300,
+        "level": 6,
+        "str": 10,
+        "hp": 25,
+        "special": "Broń legendarna. Posiadacz zyskuje pasywnie +10 STR i +25 HP."
+    },
+
+    # ====== ZABÓJCA ======
+    {
+        "id": "dagger_shadow",
+        "name": "Sztylet Cienia",
+        "class": "Zabójca",
+        "price": 70,
+        "level": 2,
+        "dex": 6,
+        "special": "Zwiększa zręczność, idealny do skrytobójstw."
+    },
+    {
+        "id": "cloak_night",
+        "name": "Płaszcz Nocy",
+        "class": "Zabójca",
+        "price": 130,
+        "level": 4,
+        "dex": 4,
+        "cha": 3,
+        "special": "Zwiększa zręczność i charyzmę w misjach szpiegowskich."
+    },
+    {
+        "id": "fangs_serpent",
+        "name": "Kły Węża",
+        "class": "Zabójca",
         "price": 250,
-        "special": "restore_100mana"
-    }
+        "level": 6,
+        "dex": 9,
+        "wis": 4,
+        "special": "Unikalne ostrza zatrute jadem. +9 DEX, +4 WIS."
+    },
+
+    # ====== MAG ======
+    {
+        "id": "magic_staff",
+        "name": "Laska Ucznia",
+        "class": "Mag",
+        "price": 75,
+        "level": 2,
+        "wis": 6,
+        "special": "Podstawowa laska magiczna. +6 mądrości."
+    },
+    {
+        "id": "robe_arcana",
+        "name": "Szata Arkanów",
+        "class": "Mag",
+        "price": 160,
+        "level": 4,
+        "hp": 20,
+        "wis": 8,
+        "special": "Szata wzmacniająca magię. +8 WIS, +20 HP."
+    },
+    {
+        "id": "orb_ancients",
+        "name": "Kula Pradawnych",
+        "class": "Mag",
+        "price": 300,
+        "level": 6,
+        "wis": 12,
+        "cha": 6,
+        "special": "Relikt dawnych magów. +12 WIS, +6 CHA."
+    },
+
+    # ====== KAPŁAN ======
+    {
+        "id": "blessed_symbol",
+        "name": "Błogosławiony Symbol",
+        "class": "Kapłan",
+        "price": 70,
+        "level": 2,
+        "wis": 5,
+        "cha": 2,
+        "special": "Święty amulet, dodaje mądrość i charyzmę."
+    },
+    {
+        "id": "robes_faith",
+        "name": "Szaty Wiary",
+        "class": "Kapłan",
+        "price": 140,
+        "level": 4,
+        "hp": 25,
+        "wis": 6,
+        "special": "Zwiększa HP i mądrość kapłana."
+    },
+    {
+        "id": "light_relic",
+        "name": "Relikt Światła",
+        "class": "Kapłan",
+        "price": 280,
+        "level": 6,
+        "wis": 10,
+        "cha": 8,
+        "special": "Potężny artefakt boskiej mocy. +10 WIS, +8 CHA."
+    },
+
+    # ====== RZADKIE / ARTEFAKTY ======
+    {
+        "id": "ring_eternity",
+        "name": "Pierścień Wieczności",
+        "class": "All",
+        "price": 500,
+        "level": 8,
+        "hp": 50,
+        "wis": 10,
+        "special": "Unikalny pierścień wzmacniający żywotność i mądrość."
+    },
+    {
+        "id": "phoenix_potion",
+        "name": "Eliksir Feniksa",
+        "class": "All",
+        "price": 450,
+        "level": 7,
+        "potion": 1000,
+        "special": "Odnawia 1000 HP i wskrzesza po śmierci (jednorazowo)."
+    },
 ]
