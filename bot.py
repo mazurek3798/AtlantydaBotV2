@@ -1,194 +1,576 @@
+# bot.py — Atlantyda RPG (pełny interaktywny panel, przyciski/selecty/modal)
+import os
+import asyncio
+import time
+import random
+import logging
+from typing import List, Tuple
+
 import discord
-from discord.ext import commands
-import os, asyncio, time
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
-import db_pg
+
+import db_pg      # musi mieć get_pool(), init_db(), get_player(), create_player(), update_player(), add_item(), get_inventory(), create_guild(), join_guild(), get_guild_by_name(), get_guild_by_id(), get_player_guild(), create_war(), get_active_wars(), increment_war_win(), end_war()
+import items      # lista ITEMS = [{'id','name','price','level'}, ...]
 
 load_dotenv()
-
 TOKEN = os.getenv("TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-INTENTS = discord.Intents.default()
-INTENTS.message_content = True
-INTENTS.guilds = True
-INTENTS.members = True
+# Basic checks
+if not TOKEN:
+    raise RuntimeError("Brak TOKEN w .env")
+if not DATABASE_URL:
+    # db_pg may also raise if missing - but warn now
+    print("⚠️ Uwaga: brak DATABASE_URL w .env — upewnij się, że zmienna jest ustawiona w Railway.")
 
-bot = commands.Bot(command_prefix="!", intents=INTENTS)
+# Constants
+ATLANTYDA_CHANNEL_ID = 1421188560165277776
+OWNER_ID = 1388648862008344608
 
+# Logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("atlantyda")
 
-# ====== EVENTY ======
-@bot.event
-async def on_ready():
-    print(f"🌊 Atlantyda RPG uruchomiona jako {bot.user}")
-    await db_pg.init_db()
-    print("📦 Połączono z bazą danych i zainicjowano tabele.")
-    synced = await bot.tree.sync()
-    print(f"✅ Zsynchronizowano {len(synced)} komend slash.")
+# Intents
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+intents.guilds = True
 
-
-# ====== KOMENDY RPG ======
-@bot.tree.command(name="start", description="Rozpocznij grę w Atlantydzie")
-async def start(interaction: discord.Interaction, klasa: str):
-    user = interaction.user
-    existing = await db_pg.get_player(user.id)
-    if existing:
-        await interaction.response.send_message("🧙 Już masz postać! Użyj /profil.", ephemeral=True)
-        return
-
-    klasy = {
-        "wojownik": {"str": 5, "dex": 2, "wis": 1, "cha": 1, "hp_bonus": 15},
-        "mag": {"str": 1, "dex": 2, "wis": 6, "cha": 1, "hp_bonus": 5},
-        "złodziej": {"str": 2, "dex": 6, "wis": 2, "cha": 2, "hp_bonus": 10},
-        "paladyn": {"str": 3, "dex": 2, "wis": 3, "cha": 3, "hp_bonus": 12},
-    }
-
-    if klasa.lower() not in klasy:
-        await interaction.response.send_message("⚔️ Klasy: Wojownik, Mag, Złodziej, Paladyn.", ephemeral=True)
-        return
-
-    stats = klasy[klasa.lower()]
-    await db_pg.create_player(user.id, user.name, klasa.capitalize(), stats)
-    await interaction.response.send_message(f"🎉 Stworzyłeś postać **{klasa.capitalize()}**!")
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 
-@bot.tree.command(name="profil", description="Zobacz profil swojej postaci")
-async def profil(interaction: discord.Interaction):
-    user = interaction.user
-    player = await db_pg.get_player(user.id)
-    if not player:
-        await interaction.response.send_message("❌ Nie masz postaci. Użyj /start.", ephemeral=True)
-        return
+# ---------------------------
+# Helper utilities
+# ---------------------------
+def in_game_channel(channel: discord.abc.GuildChannel) -> bool:
+    return channel is not None and channel.id == ATLANTYDA_CHANNEL_ID
 
-    embed = discord.Embed(title=f"🏰 {player['name']} — {player['class']}", color=discord.Color.blue())
-    embed.add_field(name="Poziom", value=player['level'])
-    embed.add_field(name="XP", value=player['xp'])
-    embed.add_field(name="HP", value=f"{player['hp']}/{player['max_hp']}")
-    embed.add_field(name="Złoto", value=player['gold'])
-    embed.add_field(name="Statystyki",
-                    value=f"STR: {player['str']}\nDEX: {player['dex']}\nWIS: {player['wis']}\nCHA: {player['cha']}")
-    await interaction.response.send_message(embed=embed)
+def short_name(name: str, max_len: int = 40) -> str:
+    return (name[:max_len-3] + "...") if len(name) > max_len else name
 
-
-@bot.tree.command(name="ekwipunek", description="Zobacz swój ekwipunek")
-async def ekwipunek(interaction: discord.Interaction):
-    user = interaction.user
-    items = await db_pg.get_inventory(user.id)
-    if not items:
-        await interaction.response.send_message("🎒 Twój ekwipunek jest pusty.", ephemeral=True)
-        return
-
-    text = "\n".join([f"• {i['item_id']} x{i['qty']}" for i in items])
-    embed = discord.Embed(title=f"Ekwipunek {user.name}", description=text, color=discord.Color.gold())
-    await interaction.response.send_message(embed=embed)
-
-
-@bot.tree.command(name="ranking", description="Zobacz ranking graczy według poziomu")
-async def ranking(interaction: discord.Interaction):
+async def fetch_all_players() -> List[Tuple[int, str]]:
     pool = await db_pg.get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT name, level, xp FROM players ORDER BY level DESC, xp DESC LIMIT 10")
-    if not rows:
-        await interaction.response.send_message("🏅 Brak danych w rankingu.")
-        return
-    text = "\n".join([f"**{i+1}.** {r['name']} — Lv {r['level']} ({r['xp']} XP)" for i, r in enumerate(rows)])
-    embed = discord.Embed(title="🏆 Ranking Atlantydy", description=text, color=discord.Color.purple())
-    await interaction.response.send_message(embed=embed)
+        rows = await conn.fetch("SELECT user_id, name FROM players")
+    return [(r['user_id'], r['name']) for r in rows]
 
-
-# ====== GILDIE ======
-@bot.tree.command(name="stworz_gildie", description="Stwórz nową gildię")
-async def stworz_gildie(interaction: discord.Interaction, nazwa: str):
-    user = interaction.user
-    player = await db_pg.get_player(user.id)
-    if not player:
-        await interaction.response.send_message("❌ Najpierw stwórz postać (/start).", ephemeral=True)
-        return
-    existing = await db_pg.get_player_guild(user.id)
-    if existing:
-        await interaction.response.send_message("🛡️ Już jesteś w gildii!", ephemeral=True)
-        return
+async def is_owner_or_admin(user: discord.User) -> bool:
+    # owner or server admin anywhere
     try:
-        gid = await db_pg.create_guild(nazwa, user.id)
-        await interaction.response.send_message(f"🏰 Gildia **{nazwa}** została utworzona! Jesteś jej mistrzem.")
+        app_info = await bot.application_info()
+        if user.id == app_info.owner.id or user.id == OWNER_ID:
+            return True
+    except Exception:
+        pass
+    for g in bot.guilds:
+        m = g.get_member(user.id)
+        if m and (m.guild_permissions.administrator or m.guild_permissions.manage_guild):
+            return True
+    return False
+
+# ---------------------------
+# UI: Views / Selects / Modals
+# ---------------------------
+
+# --- MainPanelView: per-user ephemeral panel with buttons ---
+class MainPanelView(discord.ui.View):
+    def __init__(self, user_id: int, timeout: int | None = None):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # only the user can interact with their panel
+        if interaction.user.id != self.user_id and not await is_owner_or_admin(interaction.user):
+            await interaction.response.send_message("To nie jest Twój panel.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="🎮 Stwórz postać / Start", style=discord.ButtonStyle.primary, custom_id="btn_start")
+    async def btn_start(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player = await db_pg.get_player(self.user_id)
+        if player:
+            return await interaction.response.send_message("Masz już postać — użyj 'Panel postaci'.", ephemeral=True)
+        await interaction.response.send_message("Wybierz klasę:", view=ClassSelectView(self.user_id), ephemeral=True)
+
+    @discord.ui.button(label="🧾 Panel postaci", style=discord.ButtonStyle.secondary, custom_id="btn_profile")
+    async def btn_profile(self, interaction: discord.Interaction, button: discord.ui.Button):
+        p = await db_pg.get_player(self.user_id)
+        if not p:
+            return await interaction.response.send_message("Nie masz postaci. Kliknij 'Stwórz postać'.", ephemeral=True)
+        embed = discord.Embed(title=f"🌊 Panel — {p['name']}", color=discord.Color.blue())
+        embed.add_field(name="Klasa", value=p['class'], inline=True)
+        embed.add_field(name="Poziom", value=str(p['level']), inline=True)
+        embed.add_field(name="XP", value=str(p['xp']), inline=True)
+        embed.add_field(name="HP", value=f"{p['hp']}/{p['max_hp']}", inline=True)
+        embed.add_field(name="Złoto", value=str(p['gold']), inline=True)
+        embed.add_field(name="STR", value=str(p['str']), inline=True)
+        embed.add_field(name="DEX", value=str(p['dex']), inline=True)
+        embed.add_field(name="WIS", value=str(p['wis']), inline=True)
+        embed.add_field(name="CHA", value=str(p['cha']), inline=True)
+        inv = await db_pg.get_inventory(self.user_id)
+        inv_text = ", ".join([f"{i['item_id']} x{i['qty']}" for i in inv]) or "Brak"
+        embed.add_field(name="Ekwipunek", value=inv_text[:1000], inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="⚔️ PvE", style=discord.ButtonStyle.success, custom_id="btn_pve")
+    async def btn_pve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        p = await db_pg.get_player(self.user_id)
+        if not p:
+            return await interaction.response.send_message("Nie masz postaci.", ephemeral=True)
+        embed = await handle_pve(p)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="🤺 PvP", style=discord.ButtonStyle.danger, custom_id="btn_pvp")
+    async def btn_pvp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # show select of opponents
+        rows = await fetch_all_players()
+        options = [discord.SelectOption(label=short_name(name), value=str(uid)) for uid, name in rows if uid != self.user_id]
+        if not options:
+            return await interaction.response.send_message("Brak dostępnych przeciwników.", ephemeral=True)
+        view = OpponentSelectView(self.user_id, options)
+        await interaction.response.send_message("Wybierz przeciwnika do PvP:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="🏪 Sklep", style=discord.ButtonStyle.primary, custom_id="btn_shop")
+    async def btn_shop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        options = [discord.SelectOption(label=f"{it['name']} — {it.get('price','?')}💧 (lvl {it.get('level',1)})", value=it['id']) for it in items.ITEMS]
+        view = ShopSelectView(self.user_id, options)
+        await interaction.response.send_message("Sklep — wybierz przedmiot:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="🏰 Gildia", style=discord.ButtonStyle.secondary, custom_id="btn_guild")
+    async def btn_guild(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = GuildActionView(self.user_id)
+        await interaction.response.send_message("Akcje gildii:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="📊 Ranking", style=discord.ButtonStyle.secondary, custom_id="btn_rank")
+    async def btn_rank(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pool = await db_pg.get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT name, level, gold FROM players ORDER BY level DESC, gold DESC LIMIT 10")
+        text = "\n".join([f"{i+1}. {r['name']} — lvl {r['level']} ({r['gold']}💧)" for i, r in enumerate(rows)]) or "Brak graczy"
+        embed = discord.Embed(title="🏆 Ranking TOP10", description=text, color=discord.Color.purple())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="⚙️ Admin", style=discord.ButtonStyle.danger, custom_id="btn_admin")
+    async def btn_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await is_owner_or_admin(interaction.user):
+            return await interaction.response.send_message("Brak uprawnień admina.", ephemeral=True)
+        await interaction.response.send_message("Panel administratora:", view=AdminPanelView(self.user_id), ephemeral=True)
+
+
+# --- Class selection (Select inside View + callback that creates player) ---
+class ClassSelectView(discord.ui.View):
+    def __init__(self, user_id: int, timeout: int = 120):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        options = [
+            discord.SelectOption(label="Wojownik – wytrzymały", value="Wojownik", description="HP+15, STR+2"),
+            discord.SelectOption(label="Zabójca – zwinny", value="Zabójca", description="DEX+3, STR+1"),
+            discord.SelectOption(label="Mag – inteligentny", value="Mag", description="WIS+3, DEX+1"),
+            discord.SelectOption(label="Kapłan – wspierający", value="Kapłan", description="WIS+2, CHA+2"),
+        ]
+        self.add_item(ClassSelect(options, user_id))
+
+class ClassSelect(discord.ui.Select):
+    def __init__(self, options, user_id):
+        super().__init__(placeholder="Wybierz klasę...", min_values=1, max_values=1, options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("To nie jest Twój wybór.", ephemeral=True)
+        choice = self.values[0]
+        presets = {
+            "Wojownik": {'str': 7, 'dex': 4, 'wis': 3, 'cha': 6, 'hp_bonus': 15},
+            "Zabójca": {'str': 6, 'dex': 8, 'wis': 2, 'cha': 4, 'hp_bonus': 6},
+            "Mag": {'str': 3, 'dex': 4, 'wis': 10, 'cha': 3, 'hp_bonus': 4},
+            "Kapłan": {'str': 4, 'dex': 3, 'wis': 6, 'cha': 7, 'hp_bonus': 8},
+        }
+        stats = presets.get(choice, {'str':5,'dex':5,'wis':5,'cha':5,'hp_bonus':5})
+        try:
+            await db_pg.create_player(self.user_id, interaction.user.name, choice, stats, gold=200)
+            await interaction.response.send_message(f"🎉 Stworzono postać **{choice}**!", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd tworzenia postaci: {e}", ephemeral=True)
+
+# --- Opponent select for PvP ---
+class OpponentSelectView(discord.ui.View):
+    def __init__(self, user_id: int, options: List[discord.SelectOption], timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        self.add_item(OpponentSelect(options, user_id))
+
+class OpponentSelect(discord.ui.Select):
+    def __init__(self, options: List[discord.SelectOption], user_id: int):
+        super().__init__(placeholder="Wybierz przeciwnika...", min_values=1, max_values=1, options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("To nie jest Twój wybór.", ephemeral=True)
+        target_id = int(self.values[0])
+        p1 = await db_pg.get_player(self.user_id)
+        p2 = await db_pg.get_player(target_id)
+        if not p1 or not p2:
+            return await interaction.response.send_message("Problem: gracz nie istnieje.", ephemeral=True)
+        rounds = 3; s1 = 0; s2 = 0; logs = []
+        for r in range(rounds):
+            r1 = random.randint(1,20) + p1['str'] + p1['dex']
+            r2 = random.randint(1,20) + p2['str'] + p2['dex']
+            if r1 >= r2:
+                s1 += 1; logs.append(f'R{r+1}: {p1["name"]} ({r1}) > {p2["name"]} ({r2})')
+            else:
+                s2 += 1; logs.append(f'R{r+1}: {p2["name"]} ({r2}) > {p1["name"]} ({r1})')
+        if s1 > s2:
+            await db_pg.update_player(self.user_id, gold=p1['gold'] + 10, xp=p1['xp'] + 5)
+            result = f'🏆 {p1["name"]} wygrał PvP!'
+        else:
+            await db_pg.update_player(target_id, gold=p2['gold'] + 10, xp=p2['xp'] + 5)
+            result = f'🏆 {p2["name"]} wygrał PvP!'
+        embed = discord.Embed(title="🤺 PvP", description=result, color=discord.Color.gold())
+        embed.add_field(name="Log", value="\n".join(logs[-6:])[:1900])
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# --- Shop select ---
+class ShopSelectView(discord.ui.View):
+    def __init__(self, user_id: int, options: List[discord.SelectOption], timeout: int = 120):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        self.add_item(ShopSelect(options, user_id))
+
+class ShopSelect(discord.ui.Select):
+    def __init__(self, options: List[discord.SelectOption], user_id: int):
+        super().__init__(placeholder="Wybierz przedmiot...", min_values=1, max_values=1, options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("To nie jest Twój wybór.", ephemeral=True)
+        item_id = self.values[0]
+        item = next((it for it in items.ITEMS if it['id'] == item_id), None)
+        if not item:
+            return await interaction.response.send_message("Nie znaleziono przedmiotu.", ephemeral=True)
+        player = await db_pg.get_player(self.user_id)
+        if not player:
+            return await interaction.response.send_message("Nie masz postaci.", ephemeral=True)
+        if player['level'] < item.get('level', 1):
+            return await interaction.response.send_message(f"Potrzebujesz poziomu {item.get('level',1)}.", ephemeral=True)
+        if player['gold'] < item.get('price', 999999):
+            return await interaction.response.send_message("Nie masz wystarczająco złota.", ephemeral=True)
+        await db_pg.update_player(self.user_id, gold=player['gold'] - item['price'])
+        await db_pg.add_item(self.user_id, item_id)
+        await interaction.response.send_message(f"✅ Kupiono {item['name']} za {item['price']}💧", ephemeral=True)
+
+# --- Guild action view (create/join/info) ---
+class GuildActionView(discord.ui.View):
+    def __init__(self, user_id: int, timeout: int = 120):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        self.add_item(GuildActionSelect(user_id))
+
+class GuildActionSelect(discord.ui.Select):
+    def __init__(self, user_id: int):
+        options = [
+            discord.SelectOption(label="Stwórz gildię", value="create", description="Utwórz nową gildię"),
+            discord.SelectOption(label="Dołącz do gildii", value="join", description="Dołącz do istniejącej gildii"),
+            discord.SelectOption(label="Informacje o mojej gildii", value="info", description="Zobacz szczegóły"),
+        ]
+        super().__init__(placeholder="Wybierz akcję gildii...", min_values=1, max_values=1, options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("To nie jest Twój wybór.", ephemeral=True)
+        v = self.values[0]
+        if v == "create":
+            await interaction.response.send_modal(CreateGuildModal(self.user_id))
+        elif v == "join":
+            pool = await db_pg.get_pool()
+            async with pool.acquire() as conn:
+                rows = await conn.fetch("SELECT id, name FROM guilds ORDER BY name")
+            opts = [discord.SelectOption(label=r['name'], value=str(r['id'])) for r in rows]
+            if not opts:
+                return await interaction.response.send_message("Brak gildii do dołączenia.", ephemeral=True)
+            await interaction.response.send_message("Wybierz gildii:", view=GuildJoinView(self.user_id, opts), ephemeral=True)
+        else:
+            ginfo = await db_pg.get_player_guild(self.user_id)
+            if not ginfo:
+                return await interaction.response.send_message("Nie należysz do żadnej gildii.", ephemeral=True)
+            guild = await db_pg.get_guild_by_id(ginfo['guild_id'])
+            embed = discord.Embed(title=f"🏰 {guild['name']}", color=discord.Color.green())
+            embed.add_field(name="Mistrz", value=f"<@{guild['leader']}>")
+            embed.add_field(name="Prestiż", value=guild['prestige'])
+            embed.add_field(name="Członkowie", value=guild['members_count'])
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+class CreateGuildModal(discord.ui.Modal, title="Stwórz gildię"):
+    name = discord.ui.TextInput(label="Nazwa gildii", placeholder="Podaj nazwę gildii", max_length=32)
+    def __init__(self, user_id: int):
+        super().__init__()
+        self.user_id = user_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            gid = await db_pg.create_guild(self.name.value.strip(), self.user_id)
+            await interaction.response.send_message(f"🏰 Stworzono gildię {self.name.value} (ID {gid})", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+class GuildJoinView(discord.ui.View):
+    def __init__(self, user_id: int, options: List[discord.SelectOption], timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        self.add_item(GuildJoinSelect(options, user_id))
+
+class GuildJoinSelect(discord.ui.Select):
+    def __init__(self, options: List[discord.SelectOption], user_id: int):
+        super().__init__(placeholder="Wybierz gildię...", min_values=1, max_values=1, options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("To nie jest Twój wybór.", ephemeral=True)
+        gid = int(self.values[0])
+        await db_pg.join_guild(gid, self.user_id)
+        await interaction.response.send_message("✅ Dołączono do gildii.", ephemeral=True)
+
+# --- Admin panel UI ---
+class AdminPanelView(discord.ui.View):
+    def __init__(self, user_id: int, timeout: int | None = None):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await is_owner_or_admin(interaction.user):
+            await interaction.response.send_message("Brak uprawnień.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="➕ Dodaj złoto", style=discord.ButtonStyle.success)
+    async def add_gold(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(AddGoldModal())
+
+    @discord.ui.button(label="🎁 Przyznaj przedmiot", style=discord.ButtonStyle.primary)
+    async def grant_item(self, interaction: discord.Interaction, button: discord.ui.Button):
+        options = [discord.SelectOption(label=f"{it['name']} ({it['id']})", value=it['id']) for it in items.ITEMS]
+        await interaction.response.send_message("Wybierz przedmiot:", view=AdminItemGrantView(options), ephemeral=True)
+
+    @discord.ui.button(label="📢 Ogłoś event", style=discord.ButtonStyle.danger)
+    async def announce_event(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(EventModal())
+
+class AddGoldModal(discord.ui.Modal, title="Dodaj złoto graczowi"):
+    target = discord.ui.TextInput(label="Discord ID gracza")
+    amount = discord.ui.TextInput(label="Ilość złota")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            tid = int(self.target.value.strip())
+            amt = int(self.amount.value.strip())
+            p = await db_pg.get_player(tid)
+            if not p:
+                return await interaction.response.send_message("Użytkownik nie ma postaci.", ephemeral=True)
+            await db_pg.update_player(tid, gold=p['gold'] + amt)
+            await interaction.response.send_message(f"✅ Dodano {amt}💧 graczowi {p['name']}.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+class AdminItemGrantView(discord.ui.View):
+    def __init__(self, options: List[discord.SelectOption], timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.add_item(AdminItemSelect(options))
+
+class AdminItemSelect(discord.ui.Select):
+    def __init__(self, options: List[discord.SelectOption]):
+        super().__init__(placeholder="Wybierz item...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        item_id = self.values[0]
+        await interaction.response.send_modal(AdminGrantModal(item_id))
+
+class AdminGrantModal(discord.ui.Modal):
+    def __init__(self, item_id: str):
+        super().__init__(title="Przyznaj przedmiot")
+        self.item_id = item_id
+        self.target = discord.ui.TextInput(label="Discord ID gracza")
+        self.add_item(self.target)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            tid = int(self.target.value.strip())
+            await db_pg.add_item(tid, self.item_id)
+            await interaction.response.send_message("✅ Przedmiot przyznany.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+class EventModal(discord.ui.Modal, title="Ogłoś event"):
+    text = discord.ui.TextInput(label="Opis eventu", style=discord.TextStyle.paragraph, max_length=500)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        ch = bot.get_channel(ATLANTYDA_CHANNEL_ID)
+        if ch:
+            await ch.send(f"🔥 EVENT: {self.text.value}")
+            await interaction.response.send_message("Event ogłoszony.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Kanał eventowy nie został znaleziony.", ephemeral=True)
+
+# ---------------------------
+# Gameplay logic functions
+# ---------------------------
+async def handle_pve(player: dict) -> discord.Embed:
+    lvl = player['level']
+    enemy_hp = 20 + lvl * 6 + random.randint(0, 8)
+    enemy_atk = 2 + lvl + random.randint(0, 3)
+    p_hp = player['hp']
+    e_hp = enemy_hp
+    log = []
+
+    while p_hp > 0 and e_hp > 0:
+        dmg = max(1, player['str'] + random.randint(1, 6))
+        e_hp -= dmg
+        log.append(f"Zadajesz {dmg}. Enemy HP {max(0, e_hp)}")
+        if e_hp <= 0:
+            break
+        ed = max(1, enemy_atk + random.randint(0, 4))
+        p_hp -= ed
+        log.append(f"Wróg zadaje {ed}. Twoje HP {max(0, p_hp)}")
+
+    if p_hp > 0:
+        gold = 25 + lvl * 7
+        xp = 15 + lvl * 3
+        await db_pg.update_player(player['user_id'], gold=player['gold'] + gold, xp=player['xp'] + xp, hp=p_hp)
+        loot_msg = ""
+        if random.random() < 0.25:
+            it = random.choice(items.ITEMS)
+            await db_pg.add_item(player['user_id'], it['id'])
+            loot_msg = f"Zdobyłeś: **{it['name']}**"
+        embed = discord.Embed(title="⚔️ PvE — Zwycięstwo!", color=discord.Color.green())
+        embed.add_field(name="Nagroda", value=f"+{gold}💧, +{xp} XP", inline=False)
+        if loot_msg:
+            embed.add_field(name="Loot", value=loot_msg, inline=False)
+        embed.add_field(name="Log (ostatnie)", value="\n".join(log[-6:])[:1900], inline=False)
+    else:
+        await db_pg.update_player(player['user_id'], hp=1)
+        embed = discord.Embed(title="💀 PvE — Porażka", description="Zostałeś pokonany. Odrodzisz się z 1 HP.", color=discord.Color.dark_gray())
+        embed.add_field(name="Log", value="\n".join(log[-6:])[:1900], inline=False)
+
+    return embed
+
+# ---------------------------
+# Background tasks: war monitor + events + panel sender
+# ---------------------------
+@tasks.loop(seconds=60)
+async def war_monitor_task():
+    now = int(time.time())
+    try:
+        wars = await db_pg.get_active_wars(now)
+        ch = bot.get_channel(ATLANTYDA_CHANNEL_ID)
+        for w in wars:
+            if w['end_ts'] <= now:
+                res = await db_pg.end_war(w['id'])
+                if ch:
+                    if res and res.get('winner'):
+                        gw = await db_pg.get_guild_by_id(res['winner'])
+                        embed = discord.Embed(title="🏁 Wojna zakończona", description=f"Zwycięzca: **{gw['name']}**", color=discord.Color.gold())
+                        embed.add_field(name="Wynik", value=f"{res['wins'][0]} - {res['wins'][1]}")
+                        await ch.send(embed=embed)
+                    else:
+                        await ch.send("🏁 Wojna zakończona remisem.")
     except Exception as e:
-        await interaction.response.send_message(f"⚠️ Nie udało się stworzyć gildii: {e}", ephemeral=True)
+        log.exception("Błąd war_monitor_task: %s", e)
 
+@tasks.loop(hours=1)
+async def hourly_event_task():
+    try:
+        events = [
+            ("🌑 Atak Cieni", "PvE +20% trudności"),
+            ("🌊 Błogosławieństwo Posejdona", "Gildie w wojnie +1 pkt za PvP"),
+            ("🔥 Magma", "Ataki magiczne +5 dmg")
+        ]
+        ev = random.choice(events)
+        ch = bot.get_channel(ATLANTYDA_CHANNEL_ID)
+        if ch:
+            embed = discord.Embed(title="⏳ Event godzinowy", description=f"{ev[0]} — {ev[1]}", color=discord.Color.blue())
+            await ch.send(embed=embed)
+    except Exception as e:
+        log.exception("Błąd hourly_event_task: %s", e)
 
-@bot.tree.command(name="dolacz", description="Dołącz do istniejącej gildii")
-async def dolacz(interaction: discord.Interaction, nazwa: str):
-    user = interaction.user
-    guild = await db_pg.get_guild_by_name(nazwa)
-    if not guild:
-        await interaction.response.send_message("❌ Nie znaleziono takiej gildii.", ephemeral=True)
+async def send_start_panel_once():
+    await bot.wait_until_ready()
+    ch = bot.get_channel(ATLANTYDA_CHANNEL_ID)
+    if not ch:
+        log.warning("Nie znaleziono kanału startowego.")
         return
-    await db_pg.join_guild(guild['id'], user.id)
-    await interaction.response.send_message(f"🤝 Dołączyłeś do gildii **{guild['name']}**!")
+    embed = discord.Embed(title="🌊 Atlantyda RPG — Panel", description="Kliknij **Otwórz panel** aby sterować swoją postacią.", color=discord.Color.blurple())
+    view = GlobalOpenPanelView()
+    try:
+        await ch.send(embed=embed, view=view)
+    except Exception as e:
+        log.exception("Błąd wysyłania startowego panelu: %s", e)
 
+class GlobalOpenPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
-@bot.tree.command(name="gildia", description="Zobacz informacje o swojej gildii")
-async def gildia(interaction: discord.Interaction):
-    user = interaction.user
-    membership = await db_pg.get_player_guild(user.id)
-    if not membership:
-        await interaction.response.send_message("🏕️ Nie należysz do żadnej gildii.", ephemeral=True)
-        return
-    guild = await db_pg.get_guild_by_id(membership['guild_id'])
-    embed = discord.Embed(title=f"🏰 {guild['name']}", color=discord.Color.green())
-    embed.add_field(name="Mistrz", value=f"<@{guild['leader']}>")
-    embed.add_field(name="Prestiż", value=guild['prestige'])
-    embed.add_field(name="Liczba członków", value=guild['members_count'])
-    await interaction.response.send_message(embed=embed)
+    @discord.ui.button(label="Otwórz panel", style=discord.ButtonStyle.primary)
+    async def open_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        mp = MainPanelView(interaction.user.id)
+        embed = discord.Embed(title=f"🌊 Panel Gracza — {interaction.user.name}", description="Używaj przycisków aby sterować grą.", color=discord.Color.blurple())
+        await interaction.response.send_message(embed=embed, view=mp, ephemeral=True)
 
+# ---------------------------
+# Bot events: ready/start
+# ---------------------------
+@bot.event
+async def on_ready():
+    log.info(f"🌊 Zalogowano jako {bot.user} (ID: {bot.user.id})")
+    # init db
+    try:
+        await db_pg.init_db()
+        log.info("🔗 Połączono i zainicjalizowano bazę danych.")
+    except Exception as e:
+        log.exception("Błąd init_db: %s", e)
 
-# ====== WOJNY ======
-@bot.tree.command(name="rozpocznij_wojne", description="Rozpocznij wojnę między gildiami")
-async def rozpocznij_wojne(interaction: discord.Interaction, gildia_a: str, gildia_b: str):
-    g1 = await db_pg.get_guild_by_name(gildia_a)
-    g2 = await db_pg.get_guild_by_name(gildia_b)
-    if not g1 or not g2:
-        await interaction.response.send_message("❌ Jedna z gildii nie istnieje.", ephemeral=True)
-        return
-    start_ts = int(time.time())
-    end_ts = start_ts + 3600 * 24
-    war_id = await db_pg.create_war(g1["id"], g2["id"], start_ts, end_ts)
-    await interaction.response.send_message(f"⚔️ Rozpoczęto wojnę między **{gildia_a}** a **{gildia_b}**! (ID: {war_id})")
+    # sync app commands (so any app_commands are registered)
+    try:
+        synced = await bot.tree.sync()
+        log.info(f"🔁 Zsynchronizowano {len(synced)} slash-komend.")
+    except Exception as e:
+        log.exception("Błąd synchronizacji slash-komend: %s", e)
 
+    # start tasks
+    if not war_monitor_task.is_running():
+        war_monitor_task.start()
+    if not hourly_event_task.is_running():
+        hourly_event_task.start()
+    # send start panel once
+    bot.loop.create_task(send_start_panel_once())
 
-@bot.tree.command(name="aktywn_wojny", description="Zobacz trwające wojny")
-async def aktywn_wojny(interaction: discord.Interaction):
-    wars = await db_pg.get_active_wars()
-    if not wars:
-        await interaction.response.send_message("🕊️ Brak aktywnych wojen.")
-        return
-    text = "\n".join([f"⚔️ {w['guild_a']} vs {w['guild_b']} (ID: {w['id']})" for w in wars])
-    await interaction.response.send_message(text)
+# ---------------------------
+# Minimal slash to open panel globally (optional)
+# ---------------------------
+@bot.tree.command(name="panel", description="Otwórz interaktywny panel Atlantyda RPG")
+async def slash_panel(interaction: discord.Interaction):
+    embed = discord.Embed(title=f"🌊 Panel Gracza — {interaction.user.name}", description="Używaj przycisków aby sterować grą.", color=discord.Color.blurple())
+    view = MainPanelView(interaction.user.id)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-
-# ====== PANEL ADMINA ======
-@bot.tree.command(name="panel_admina", description="Panel administratora RPG (tylko właściciel)")
-@commands.is_owner()
-async def panel_admina(interaction: discord.Interaction):
-    embed = discord.Embed(title="⚙️ Panel Administratora", color=discord.Color.red())
-    embed.add_field(name="/dodaj_item", value="Dodaj przedmiot graczowi", inline=False)
-    embed.add_field(name="/rozpocznij_wojne", value="Rozpocznij wojnę między gildiami", inline=False)
-    embed.add_field(name="/ranking", value="Zobacz ranking graczy", inline=False)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="dodaj_item", description="Dodaj przedmiot graczowi (Admin)")
-@commands.is_owner()
-async def dodaj_item(interaction: discord.Interaction, user: discord.User, item: str, ilosc: int = 1):
-    await db_pg.add_item(user.id, item, ilosc)
-    await interaction.response.send_message(f"🎁 Dodano {ilosc}x {item} do {user.name}")
-
-
-# ====== START ======
+# ---------------------------
+# Startup helper + run
+# ---------------------------
 async def main():
     async with bot:
-        await bot.load_extension("guide")
+        # load cogs/extensions if you keep any
+        try:
+            await bot.load_extension("guide")
+            log.info("Załadowano extension 'guide'.")
+        except Exception:
+            pass
         await bot.start(TOKEN)
 
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info("Wyłączono ręcznie.")
