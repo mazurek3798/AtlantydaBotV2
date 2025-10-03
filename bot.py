@@ -712,8 +712,7 @@ class CreateGuildModal(discord.ui.Modal, title="Utwórz gildię"):
 class EditGuildModal(discord.ui.Modal, title="Edytuj gildię"):
     guild_id = discord.ui.TextInput(label="ID gildii")
     new_name = discord.ui.TextInput(label="Nowa nazwa (zostaw puste aby nie zmieniać)", required=False)
-    new_leader =_
-
+new_leader = self.new_leader.value
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not await is_owner_or_admin(interaction.user):
