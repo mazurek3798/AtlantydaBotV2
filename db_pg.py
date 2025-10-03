@@ -141,4 +141,6 @@ async def get_guild_by_name(name):
         row = await conn.fetchrow('SELECT * FROM guilds WHERE name=$1', name)
         return dict(row) if row else None
 
-async def get_guild_by_id(_
+async def get_guild_by_id(_id):
+    async with pool.acquire() as conn:
+        return await conn.fetchrow("SELECT * FROM guilds WHERE id=$1", _id)
