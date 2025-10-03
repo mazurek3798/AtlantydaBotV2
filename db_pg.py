@@ -2,7 +2,7 @@ import asyncpg, os, time, random
 from dotenv import load_dotenv
 load_dotenv()
 
-DATABASE_URL = os.getenv('turntable.proxy.rlwy.net:16261')
+DATABASE_URL = os.getenv('postgresql://postgres:GDQcnZgLKttXoliKorApDQunOalLYZve@turntable.proxy.rlwy.net:16261/railway')
 _pool = None
 
 async def get_pool():
