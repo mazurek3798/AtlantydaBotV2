@@ -398,10 +398,322 @@ class GuildJoinSelect(discord.ui.Select):
         await interaction.response.send_message("✅ Dołączono do gildii.", ephemeral=True)
 
 # --- Admin panel UI ---
+# ===============================
+# 👑 PEŁNY PANEL ADMINA ATLANTYDY (z modalami)
+# ===============================
+import discord
+from discord import TextStyle
+from discord.ext import commands
+
+# helper: pobierz ostatnie logi admina
+async def get_admin_logs(admin_id: int, limit: int = 10) -> list:
+    try:
+        pool = await db_pg.get_pool()
+        async with pool.acquire() as conn:
+            # upewnij się, że tabela istnieje (bez szkód jeśli już istnieje)
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id SERIAL PRIMARY KEY,
+                admin_id BIGINT,
+                action TEXT,
+                details TEXT,
+                timestamp TIMESTAMP DEFAULT NOW()
+            )
+            """)
+            rows = await conn.fetch(
+                "SELECT action, details, timestamp FROM admin_logs WHERE admin_id=$1 ORDER BY timestamp DESC LIMIT $2",
+                admin_id, limit
+            )
+        return [f"{r['timestamp'].strftime('%Y-%m-%d %H:%M')} — {r['action']}: {r['details']}" for r in rows]
+    except Exception:
+        return []
+
+# wrapper logujący akcje admina (używaj tej funkcji aby zapisywać logi)
+async def log_admin_action_from_panel(admin_id: int, action: str, details: str):
+    try:
+        pool = await db_pg.get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO admin_logs (admin_id, action, details) VALUES ($1,$2,$3)",
+                admin_id, action, details
+            )
+    except Exception:
+        # nie przerywamy działania w razie błędu logu
+        pass
+
+# -------------------------
+# GŁÓWNY ADMIN PANEL (widok)
+# -------------------------
 class AdminPanelView(discord.ui.View):
     def __init__(self, user_id: int, timeout: int | None = None):
         super().__init__(timeout=timeout)
         self.user_id = user_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await is_owner_or_admin(interaction.user):
+            await interaction.response.send_message("❌ Nie masz uprawnień do korzystania z panelu admina.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="🧙 Gracze", style=discord.ButtonStyle.primary, row=0)
+    async def players(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="🧙 Zarządzanie graczami", description="Wybierz operację:", color=discord.Color.blue())
+        view = PlayerManageView(interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="🏰 Gildie", style=discord.ButtonStyle.secondary, row=0)
+    async def guilds(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="🏰 Zarządzanie gildii", description="Twórz / edytuj / usuwaj gildie", color=discord.Color.gold())
+        view = GuildManageView(interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="💰 Ekonomia", style=discord.ButtonStyle.success, row=1)
+    async def economy(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="💰 Zarządzanie ekonomią", description="Globalne zmiany gold / XP", color=discord.Color.green())
+        view = EconomyManageView(interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="🎉 Eventy", style=discord.ButtonStyle.blurple, row=1)
+    async def events(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="🎉 Eventy", description="Ogłoś event lub przyznaj nagrody", color=discord.Color.purple())
+        view = EventManageView(interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="⚒️ Kary", style=discord.ButtonStyle.danger, row=2)
+    async def punishments(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="⚒️ Kary", description="Mute / Ban / Ostrzeżenia", color=discord.Color.red())
+        view = PunishmentManageView(interaction.user.id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="📜 Logi", style=discord.ButtonStyle.gray, row=2)
+    async def logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="📜 Logi Administratora", description="Ostatnie akcje wykonane przez Ciebie", color=discord.Color.dark_gray())
+        logs = await get_admin_logs(interaction.user.id)
+        embed.add_field(name="Ostatnie akcje", value="\n".join(logs) if logs else "Brak logów.")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+# -------------------------
+# PODPANEL: GRACZE
+# -------------------------
+class PlayerManageView(discord.ui.View):
+    def __init__(self, admin_id: int):
+        super().__init__(timeout=120)
+        self.admin_id = admin_id
+
+    @discord.ui.button(label="➕ Dodaj złoto", style=discord.ButtonStyle.success)
+    async def add_gold(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(AddGoldModal(self.admin_id))
+
+    @discord.ui.button(label="⚙️ Edytuj XP", style=discord.ButtonStyle.primary)
+    async def edit_xp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(EditXPModal(self.admin_id))
+
+    @discord.ui.button(label="🚫 Zbanuj gracza", style=discord.ButtonStyle.danger)
+    async def ban_player(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(BanPlayerModal(self.admin_id))
+
+    @discord.ui.button(label="⬅️ Wróć", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=discord.Embed(title="👑 Panel Administratora Atlantydy", color=discord.Color.gold()), view=AdminPanelView(interaction.user.id))
+
+
+# -------------------------
+# PODPANEL: GILDIE
+# -------------------------
+class GuildManageView(discord.ui.View):
+    def __init__(self, admin_id: int):
+        super().__init__(timeout=120)
+        self.admin_id = admin_id
+
+    @discord.ui.button(label="➕ Utwórz gildię", style=discord.ButtonStyle.success)
+    async def create_guild(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(CreateGuildModal(self.admin_id))
+
+    @discord.ui.button(label="✏️ Edytuj gildię", style=discord.ButtonStyle.primary)
+    async def edit_guild(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(EditGuildModal(self.admin_id))
+
+    @discord.ui.button(label="🗑️ Usuń gildię", style=discord.ButtonStyle.danger)
+    async def delete_guild(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(DeleteGuildModal(self.admin_id))
+
+    @discord.ui.button(label="⬅️ Wróć", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=discord.Embed(title="👑 Panel Administratora Atlantydy", color=discord.Color.gold()), view=AdminPanelView(interaction.user.id))
+
+
+# -------------------------
+# PODPANEL: EKONOMIA
+# -------------------------
+class EconomyManageView(discord.ui.View):
+    def __init__(self, admin_id: int):
+        super().__init__(timeout=120)
+        self.admin_id = admin_id
+
+    @discord.ui.button(label="💎 Dodaj złoto globalnie", style=discord.ButtonStyle.success)
+    async def add_global_gold(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(GlobalGoldModal(self.admin_id))
+
+    @discord.ui.button(label="🧠 Dodaj XP globalnie", style=discord.ButtonStyle.primary)
+    async def add_global_xp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(GlobalXPModal(self.admin_id))
+
+    @discord.ui.button(label="⬅️ Wróć", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=discord.Embed(title="👑 Panel Administratora Atlantydy", color=discord.Color.gold()), view=AdminPanelView(interaction.user.id))
+
+
+# -------------------------
+# PODPANEL: EVENTY
+# -------------------------
+class EventManageView(discord.ui.View):
+    def __init__(self, admin_id: int):
+        super().__init__(timeout=120)
+        self.admin_id = admin_id
+
+    @discord.ui.button(label="📢 Ogłoś Event", style=discord.ButtonStyle.primary)
+    async def announce_event(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(AnnounceEventModal(self.admin_id))
+
+    @discord.ui.button(label="🏆 Przyznaj nagrodę", style=discord.ButtonStyle.success)
+    async def give_rewards(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(GiveRewardModal(self.admin_id))
+
+    @discord.ui.button(label="⬅️ Wróć", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=discord.Embed(title="👑 Panel Administratora Atlantydy", color=discord.Color.gold()), view=AdminPanelView(interaction.user.id))
+
+
+# -------------------------
+# PODPANEL: KARY
+# -------------------------
+class PunishmentManageView(discord.ui.View):
+    def __init__(self, admin_id: int):
+        super().__init__(timeout=120)
+        self.admin_id = admin_id
+
+    @discord.ui.button(label="🔇 Wycisz gracza", style=discord.ButtonStyle.primary)
+    async def mute_player(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(MutePlayerModal(self.admin_id))
+
+    @discord.ui.button(label="🚫 Zbanuj gracza", style=discord.ButtonStyle.danger)
+    async def ban_player(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(BanPlayerModal(self.admin_id))
+
+    @discord.ui.button(label="⚠️ Ostrzeż gracza", style=discord.ButtonStyle.secondary)
+    async def warn_player(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(WarnPlayerModal(self.admin_id))
+
+    @discord.ui.button(label="⬅️ Wróć", style=discord.ButtonStyle.gray)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=discord.Embed(title="👑 Panel Administratora Atlantydy", color=discord.Color.gold()), view=AdminPanelView(interaction.user.id))
+
+
+# -------------------------
+# MODALE (formularze)
+# -------------------------
+
+# --- Dodaj złoto do konkretnego gracza ---
+class AddGoldModal(discord.ui.Modal, title="Dodaj złoto graczowi"):
+    player_id = discord.ui.TextInput(label="ID gracza (Discord ID)", placeholder="np. 1383111630304575580")
+    amount = discord.ui.TextInput(label="Ilość złota", placeholder="np. 100", style=TextStyle.short)
+
+    def __init__(self, admin_id: int):
+        super().__init__()
+        self.admin_id = admin_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            pid = int(self.player_id.value.strip())
+            amt = int(self.amount.value.strip())
+            p = await db_pg.get_player(pid)
+            if not p:
+                return await interaction.response.send_message("❌ Gracz nie istnieje.", ephemeral=True)
+            new_gold = p.get('gold', 0) + amt
+            await db_pg.update_player(pid, gold=new_gold)
+            await log_admin_action_from_panel(self.admin_id, "Dodanie złota", f"{amt} do gracza {pid}")
+            await interaction.response.send_message(f"✅ Dodano {amt}💧 graczowi {p['name']} (ID {pid}).", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+# --- Edytuj XP pojedynczego gracza ---
+class EditXPModal(discord.ui.Modal, title="Dodaj/Usuń XP graczowi"):
+    player_id = discord.ui.TextInput(label="ID gracza")
+    amount = discord.ui.TextInput(label="Ilość XP (może być ujemne)", placeholder="np. 50 lub -20")
+
+    def __init__(self, admin_id: int):
+        super().__init__()
+        self.admin_id = admin_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            pid = int(self.player_id.value.strip())
+            amt = int(self.amount.value.strip())
+            p = await db_pg.get_player(pid)
+            if not p:
+                return await interaction.response.send_message("❌ Gracz nie istnieje.", ephemeral=True)
+            new_xp = max(0, p.get('xp', 0) + amt)
+            await db_pg.update_player(pid, xp=new_xp)
+            await log_admin_action_from_panel(self.admin_id, "Edycja XP", f"{amt} XP dla {pid}")
+            await interaction.response.send_message(f"✅ Zaktualizowano XP gracza {p['name']}: teraz {new_xp} XP.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+# --- Ban gracza (kolumna banned w players) ---
+class BanPlayerModal(discord.ui.Modal, title="Zbanuj gracza (RPG)"):
+    player_id = discord.ui.TextInput(label="ID gracza")
+    reason = discord.ui.TextInput(label="Powód bana", style=TextStyle.paragraph, required=False)
+
+    def __init__(self, admin_id: int):
+        super().__init__()
+        self.admin_id = admin_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            pid = int(self.player_id.value.strip())
+            reason = self.reason.value.strip() if self.reason.value else "Brak powodu"
+            p = await db_pg.get_player(pid)
+            if not p:
+                return await interaction.response.send_message("❌ Gracz nie istnieje.", ephemeral=True)
+            # ustaw banned=True — zakładamy, że kolumna banned istnieje (bool)
+            try:
+                await db_pg.update_player(pid, banned=True)
+            except TypeError:
+                # jeśli update_player przyjmuje inne parametry, użyj SQL bezpośrednio
+                pool = await db_pg.get_pool()
+                async with pool.acquire() as conn:
+                    await conn.execute("UPDATE players SET banned=$1 WHERE user_id=$2", True, pid)
+            await log_admin_action_from_panel(self.admin_id, "Ban gracza", f"{pid} — {reason}")
+            await interaction.response.send_message(f"🚫 Zbanowano gracza ID {pid}. Powód: {reason}", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+# --- Utwórz gildię ---
+class CreateGuildModal(discord.ui.Modal, title="Utwórz gildię"):
+    name = discord.ui.TextInput(label="Nazwa gildii", max_length=32)
+    leader = discord.ui.TextInput(label="Leader (Discord ID)")
+
+    def __init__(self, admin_id: int):
+        super().__init__()
+        self.admin_id = admin_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            name = self.name.value.strip()
+            leader = int(self.leader.value.strip())
+            gid = await db_pg.create_guild(name, leader)
+            await log_admin_action_from_panel(self.admin_id, "Utworzenie gildii", f"{name} (ID {gid})")
+            await interaction.response.send_message(f"✅ Stworzono gildię **{name}** (ID {gid}).", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Błąd: {e}", ephemeral=True)
+
+# --- Edytuj gildię (prostota: edytuj nazwę / lidera) ---
+class EditGuildModal(discord.ui.Modal, title="Edytuj gildię"):
+    guild_id = discord.ui.TextInput(label="ID gildii")
+    new_name = discord.ui.TextInput(label="Nowa nazwa (zostaw puste aby nie zmieniać)", required=False)
+    new_leader =_
+
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not await is_owner_or_admin(interaction.user):
