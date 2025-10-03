@@ -1,4 +1,3 @@
-# bot.py — Atlantyda RPG (pełny interaktywny panel, przyciski/selecty/modal)
 import os
 import asyncio
 import time
