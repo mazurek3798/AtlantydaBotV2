@@ -131,11 +131,74 @@ class MainPanelView(discord.ui.View):
         view = OpponentSelectView(self.user_id, options)
         await interaction.response.send_message("Wybierz przeciwnika do PvP:", view=view, ephemeral=True)
 
-    @discord.ui.button(label="🏪 Sklep", style=discord.ButtonStyle.primary, custom_id="btn_shop")
+    @discord.ui.button(label="🏪 Sklep", style=discord.ButtonStyle.primary)
     async def btn_shop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        options = [discord.SelectOption(label=f"{it['name']} — {it.get('price','?')}💧 (lvl {it.get('level',1)})", value=it['id']) for it in items.ITEMS]
-        view = ShopSelectView(self.user_id, options)
-        await interaction.response.send_message("Sklep — wybierz przedmiot:", view=view, ephemeral=True)
+        import items
+
+        # Kategorie sklepu
+        categories = {
+            "Wojownik": [it for it in items.ITEMS if it["class"] == "Wojownik"],
+            "Zabójca": [it for it in items.ITEMS if it["class"] == "Zabójca"],
+            "Mag": [it for it in items.ITEMS if it["class"] == "Mag"],
+            "Kapłan": [it for it in items.ITEMS if it["class"] == "Kapłan"],
+            "Artefakty": [it for it in items.ITEMS if it["class"] == "All"],
+        }
+
+        # Tworzymy menu kategorii
+        cat_options = [
+            discord.SelectOption(label=name, value=name, description=f"Przedmioty klasy {name}")
+            for name in categories.keys()
+        ]
+
+        class CategorySelect(discord.ui.Select):
+            def __init__(self):
+                super().__init__(placeholder="Wybierz kategorię...", options=cat_options)
+
+            async def callback(self, interaction: discord.Interaction):
+                cat = self.values[0]
+                items_list = categories[cat]
+
+                # Podmenu z przedmiotami (max 25)
+                item_options = [
+                    discord.SelectOption(
+                        label=f"{it['name']} — {it.get('price', '?')}💧 (lvl {it.get('level', 1)})",
+                        description=f"+{it.get('hp',0)}HP +{it.get('str',0)}STR +{it.get('dex',0)}DEX +{it.get('wis',0)}WIS +{it.get('cha',0)}CHA",
+                        value=it["id"]
+                    )
+                    for it in items_list[:25]
+                ]
+
+                class ItemSelect(discord.ui.Select):
+                    def __init__(self):
+                        super().__init__(placeholder=f"🛒 Wybierz przedmiot ({cat})", options=item_options)
+
+                    async def callback(self, interaction: discord.Interaction):
+                        item_id = self.values[0]
+                        selected_item = next(it for it in items.ITEMS if it["id"] == item_id)
+
+                        # Zapis zakupu
+                        pool = await db_pg.get_pool()
+                        player = await db_pg.get_player(pool, interaction.user.id)
+
+                        if player["water"] < selected_item["price"]:
+                            await interaction.response.send_message("❌ Nie masz wystarczająco 💧!", ephemeral=True)
+                            return
+
+                        await db_pg.add_item(pool, interaction.user.id, selected_item["id"])
+                        await db_pg.update_player(pool, interaction.user.id, water=player["water"] - selected_item["price"])
+
+                        await interaction.response.send_message(
+                            f"✅ Kupiłeś **{selected_item['name']}** za {selected_item['price']}💧!",
+                            ephemeral=True
+                        )
+
+                view = discord.ui.View()
+                view.add_item(ItemSelect())
+                await interaction.response.send_message(f"📜 Sklep — kategoria **{cat}**", view=view, ephemeral=True)
+
+        view = discord.ui.View()
+        view.add_item(CategorySelect())
+        await interaction.response.send_message("🛍️ Wybierz kategorię sklepu:", view=view, ephemeral=True)
 
     @discord.ui.button(label="🏰 Gildia", style=discord.ButtonStyle.secondary, custom_id="btn_guild")
     async def btn_guild(self, interaction: discord.Interaction, button: discord.ui.Button):
