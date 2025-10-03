@@ -710,9 +710,60 @@ class CreateGuildModal(discord.ui.Modal, title="Utwórz gildię"):
 
 # --- Edytuj gildię (prostota: edytuj nazwę / lidera) ---
 class EditGuildModal(discord.ui.Modal, title="Edytuj gildię"):
-    guild_id = discord.ui.TextInput(label="ID gildii")
-    new_name = discord.ui.TextInput(label="Nowa nazwa (zostaw puste aby nie zmieniać)", required=False)
-new_leader = self.new_leader.value
+    def __init__(self):
+        super().__init__()
+        self.guild_name = discord.ui.TextInput(
+            label="Nazwa gildii",
+            placeholder="Wpisz nazwę gildii do edycji...",
+            style=discord.TextStyle.short,
+            required=True
+        )
+        self.new_leader = discord.ui.TextInput(
+            label="Nowy lider (ID gracza)",
+            placeholder="Wpisz ID nowego lidera...",
+            style=discord.TextStyle.short,
+            required=False
+        )
+        self.description = discord.ui.TextInput(
+            label="Nowy opis gildii",
+            placeholder="Podaj nowy opis gildii (opcjonalnie)",
+            style=discord.TextStyle.paragraph,
+            required=False
+        )
+
+        self.add_item(self.guild_name)
+        self.add_item(self.new_leader)
+        self.add_item(self.description)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild_name = self.guild_name.value
+        new_leader = self.new_leader.value
+        description = self.description.value
+
+        # Tutaj możesz dodać logikę aktualizacji w bazie danych
+        # np. await update_guild(guild_name, new_leader, description)
+
+        embed = discord.Embed(
+            title="🏰 Gildia zaktualizowana!",
+            description=f"Gildia **{guild_name}** została pomyślnie zaktualizowana.",
+            color=discord.Color.green()
+        )
+
+        if new_leader:
+            embed.add_field(name="Nowy lider", value=f"<@{new_leader}>", inline=False)
+        if description:
+            embed.add_field(name="Nowy opis", value=description, inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await is_owner_or_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ Nie masz uprawnień do edycji gildii.", ephemeral=True
+            )
+            return False
+        return True
+
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not await is_owner_or_admin(interaction.user):
