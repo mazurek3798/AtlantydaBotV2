@@ -1,13 +1,21 @@
-import asyncpg, os, time, random
+import asyncpg
+import os
+import time
+import random
 from dotenv import load_dotenv
+
 load_dotenv()
 
-DATABASE_URL = os.getenv('postgresql://postgres:GDQcnZgLKttXoliKorApDQunOalLYZve@turntable.proxy.rlwy.net:16261/railway')
+# ⬇️ PRAWIDŁOWE pobranie URL bazy danych
+DATABASE_URL = os.getenv("DATABASE_URL")
 _pool = None
 
 async def get_pool():
     global _pool
     if _pool is None:
+        if not DATABASE_URL:
+            raise ValueError("❌ Brak zmiennej DATABASE_URL! Ustaw ją w Railway Variables.")
+        print(f"🔗 Łączenie z bazą: {DATABASE_URL}")
         _pool = await asyncpg.create_pool(DATABASE_URL, max_size=10)
     return _pool
 
@@ -66,6 +74,7 @@ async def init_db():
             duration INT
         );
         """)
+        print("✅ Baza danych zainicjalizowana!")
 
 # Players
 async def create_player(user_id, name, klass, stats, gold=150):
@@ -132,68 +141,4 @@ async def get_guild_by_name(name):
         row = await conn.fetchrow('SELECT * FROM guilds WHERE name=$1', name)
         return dict(row) if row else None
 
-async def get_guild_by_id(gid):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow('SELECT id,name,leader,prestige,members_count FROM guilds WHERE id=$1', gid)
-        return dict(row) if row else None
-
-async def get_player_guild(user_id):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow('SELECT guild_id, role FROM guild_members WHERE user_id=$1', user_id)
-        return dict(row) if row else None
-
-# Wars
-async def create_war(guild_a, guild_b, start_ts, end_ts):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow('INSERT INTO wars (guild_a,guild_b,start_ts,end_ts,wins_a,wins_b,active) VALUES($1,$2,$3,$4,0,0,TRUE) RETURNING id', guild_a, guild_b, start_ts, end_ts)
-        return row['id']
-
-async def get_active_wars(now_ts=None):
-    if now_ts is None:
-        now_ts = int(time.time())
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch('SELECT * FROM wars WHERE active=TRUE AND start_ts <= $1 AND end_ts >= $1', now_ts)
-        return [dict(r) for r in rows]
-
-async def increment_war_win(war_id, side):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        if side=='a':
-            await conn.execute('UPDATE wars SET wins_a = wins_a + 1 WHERE id=$1', war_id)
-        else:
-            await conn.execute('UPDATE wars SET wins_b = wins_b + 1 WHERE id=$1', war_id)
-
-async def end_war(war_id):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        war = await conn.fetchrow('SELECT * FROM wars WHERE id=$1', war_id)
-        if not war: return None
-        await conn.execute('UPDATE wars SET active=FALSE WHERE id=$1', war_id)
-        wa = war['wins_a']; wb = war['wins_b']; ga = war['guild_a']; gb = war['guild_b']
-        if wa>wb:
-            winner = ga; loser = gb
-            await conn.execute('UPDATE guilds SET prestige = prestige + 10 WHERE id=$1', winner)
-            rows = await conn.fetch('SELECT user_id FROM guild_members WHERE guild_id=$1', winner)
-            for r in rows:
-                uid = r['user_id']; bonus = 100 + wa*20
-                await conn.execute('UPDATE players SET gold = gold + $1 WHERE user_id=$2', bonus, uid)
-                if random.random() < 0.2:
-                    await conn.execute('INSERT INTO inventory (user_id,item_id,qty) VALUES($1,$2,1) ON CONFLICT DO NOTHING', uid, 'victory_trophy')
-            return {'winner':winner,'loser':loser,'wins':(wa,wb)}
-        elif wb>wa:
-            winner = gb; loser = ga
-            await conn.execute('UPDATE guilds SET prestige = prestige + 10 WHERE id=$1', winner)
-            rows = await conn.fetch('SELECT user_id FROM guild_members WHERE guild_id=$1', winner)
-            for r in rows:
-                uid = r['user_id']; bonus = 100 + wb*20
-                await conn.execute('UPDATE players SET gold = gold + $1 WHERE user_id=$2', bonus, uid)
-                if random.random() < 0.2:
-                    await conn.execute('INSERT INTO inventory (user_id,item_id,qty) VALUES($1,$2,1) ON CONFLICT DO NOTHING', uid, 'victory_trophy')
-            return {'winner':winner,'loser':loser,'wins':(wa,wb)}
-        else:
-            await conn.execute('UPDATE guilds SET prestige = prestige + 2 WHERE id IN ($1,$2)', ga, gb)
-            return {'winner':None,'wins':(wa,wb)}
+async def get_guild_by_id(_
